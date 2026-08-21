@@ -16,16 +16,28 @@ name: release
 #
 # EXPECTED_IDENTITY is cut-release.yml's own Actions identity (ambient
 # credential, no human login) -- see that workflow's header comment for why.
+#
+# Also accepts workflow_dispatch: a workflow run started BY the default
+# Actions credential (cut-release.yml's own `git push`) does not, by GitHub
+# design, trigger other workflows -- the tag lands but this workflow's own
+# `push: tags:` event never fires. workflow_dispatch is the documented way
+# round that: verify+publish stays reachable for every tag, chained or not.
 
 on:
   push:
     tags:
       - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "tag to verify + publish (workflow_dispatch path only)"
+        required: true
 
 permissions:
   contents: write
 
 env:
+  TAG: ${{ inputs.tag || github.ref_name }}
   GITSIGN_VERSION: 0.17.1
   GITSIGN_SHA256: 69213a8a0813a151e5a47d0060862952ff833a845d57309dff76f7ba6600abae
   EXPECTED_IDENTITY: https://github.com/policy-as-versioned-ico/ico/.github/workflows/cut-release.yml@refs/heads/main
@@ -65,33 +77,36 @@ jobs:
           set -euo pipefail
           # actions/checkout's second fetch flattens the annotated tag object
           # gitsign needs -- re-fetch the real tag ref before verifying it.
-          git fetch origin "+refs/tags/${GITHUB_REF_NAME}:refs/tags/${GITHUB_REF_NAME}" --force
-          gitsign verify-tag "${GITHUB_REF_NAME}" \
+          git fetch origin "+refs/tags/${TAG}:refs/tags/${TAG}" --force
+          gitsign verify-tag "${TAG}" \
             --certificate-identity="${EXPECTED_IDENTITY}" \
             --certificate-oidc-issuer="${EXPECTED_ISSUER}"
 
       - name: tag still resolves to the commit this run was triggered from
         working-directory: ico
+        # Only meaningful on the push-triggered path -- see the on: comment.
+        if: github.event_name == 'push'
         run: |
           set -euo pipefail
-          resolved=$(git rev-parse "${GITHUB_REF_NAME}^{commit}")
+          resolved=$(git rev-parse "${TAG}^{commit}")
           if [ "${resolved}" != "${GITHUB_SHA}" ]; then
-            echo "FAIL: tag ${GITHUB_REF_NAME} resolves to ${resolved}, run was triggered from ${GITHUB_SHA}"
+            echo "FAIL: tag ${TAG} resolves to ${resolved}, run was triggered from ${GITHUB_SHA}"
             exit 1
           fi
-          echo "OK: ${GITHUB_REF_NAME} -> ${resolved}"
+          echo "OK: ${TAG} -> ${resolved}"
 
       - name: publish GitHub Release recording the resolved SHA
         working-directory: ico
         run: |
           set -euo pipefail
+          resolved=$(git rev-parse "${TAG}^{commit}")
           {
-            git tag -l --format='%(contents)' "${GITHUB_REF_NAME}" | sed '/^-----BEGIN SIGNED MESSAGE-----$/,$d'
+            git tag -l --format='%(contents)' "${TAG}" | sed '/^-----BEGIN SIGNED MESSAGE-----$/,$d'
             echo "---"
-            echo "Verified gitsign signature (identity: ${EXPECTED_IDENTITY}, issuer: ${EXPECTED_ISSUER}). Resolved commit: ${GITHUB_SHA}."
+            echo "Verified gitsign signature (identity: ${EXPECTED_IDENTITY}, issuer: ${EXPECTED_ISSUER}). Resolved commit: ${resolved}."
           } > release-notes.md
-          gh release create "${GITHUB_REF_NAME}" \
-            --title "${GITHUB_REF_NAME}" \
+          gh release create "${TAG}" \
+            --title "${TAG}" \
             --notes-file release-notes.md
         env:
           GH_TOKEN: ${{ github.token }}
