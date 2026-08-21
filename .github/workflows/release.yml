@@ -1,0 +1,97 @@
+name: release
+
+# Runs on every semver tag push. Verifies the tag's gitsign signature
+# identity-pinned against an offline Rekor bundle, checks the tag still
+# resolves to the commit this run was triggered from, runs the schema's own
+# offline verify script as a release gate, and publishes a GitHub Release.
+# See cut-release.yml for how the tag gets here.
+#
+# verify-penalty-feed.sh reaches into a sibling `../platform/fair/fair.py`
+# (a pinned-by-relative-path dependency, unchanged since before the org
+# split) -- so this job checks out `platform` at that exact sibling path,
+# the same two-checkouts-in-one-run technique driftwood's shift-left gate
+# uses to reach platform's shift-left/ci-check.py. Two separate orgs, one
+# run: this is ticket mo-10's "separate checkouts in separate orgs" proof
+# for ico's own gate, not just driftwood's.
+#
+# EXPECTED_IDENTITY is cut-release.yml's own Actions identity (ambient
+# credential, no human login) -- see that workflow's header comment for why.
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+env:
+  GITSIGN_VERSION: 0.17.1
+  GITSIGN_SHA256: 69213a8a0813a151e5a47d0060862952ff833a845d57309dff76f7ba6600abae
+  EXPECTED_IDENTITY: https://github.com/policy-as-versioned-ico/ico/.github/workflows/cut-release.yml@refs/heads/main
+  EXPECTED_ISSUER: https://token.actions.githubusercontent.com
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: ico
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: actions/checkout@v4
+        with:
+          repository: policy-as-versioned-platform/platform
+          path: platform
+
+      - name: install pinned gitsign (binary + checksum, no marketplace action)
+        run: |
+          set -euo pipefail
+          curl -sSL -o gitsign "https://github.com/sigstore/gitsign/releases/download/v${GITSIGN_VERSION}/gitsign_${GITSIGN_VERSION}_linux_amd64"
+          echo "${GITSIGN_SHA256}  gitsign" | sha256sum -c -
+          chmod +x gitsign && sudo mv gitsign /usr/local/bin/gitsign
+
+      - name: penalty-feed offline verify (release gate)
+        working-directory: ico
+        run: ./verify-penalty-feed.sh
+
+      - name: gitsign verify-tag, identity-pinned, offline Rekor bundle
+        working-directory: ico
+        env:
+          GITSIGN_REKOR_MODE: offline
+        run: |
+          set -euo pipefail
+          # actions/checkout's second fetch flattens the annotated tag object
+          # gitsign needs -- re-fetch the real tag ref before verifying it.
+          git fetch origin "+refs/tags/${GITHUB_REF_NAME}:refs/tags/${GITHUB_REF_NAME}" --force
+          gitsign verify-tag "${GITHUB_REF_NAME}" \
+            --certificate-identity="${EXPECTED_IDENTITY}" \
+            --certificate-oidc-issuer="${EXPECTED_ISSUER}"
+
+      - name: tag still resolves to the commit this run was triggered from
+        working-directory: ico
+        run: |
+          set -euo pipefail
+          resolved=$(git rev-parse "${GITHUB_REF_NAME}^{commit}")
+          if [ "${resolved}" != "${GITHUB_SHA}" ]; then
+            echo "FAIL: tag ${GITHUB_REF_NAME} resolves to ${resolved}, run was triggered from ${GITHUB_SHA}"
+            exit 1
+          fi
+          echo "OK: ${GITHUB_REF_NAME} -> ${resolved}"
+
+      - name: publish GitHub Release recording the resolved SHA
+        working-directory: ico
+        run: |
+          set -euo pipefail
+          {
+            git tag -l --format='%(contents)' "${GITHUB_REF_NAME}" | sed '/^-----BEGIN SIGNED MESSAGE-----$/,$d'
+            echo "---"
+            echo "Verified gitsign signature (identity: ${EXPECTED_IDENTITY}, issuer: ${EXPECTED_ISSUER}). Resolved commit: ${GITHUB_SHA}."
+          } > release-notes.md
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "${GITHUB_REF_NAME}" \
+            --notes-file release-notes.md
+        env:
+          GH_TOKEN: ${{ github.token }}

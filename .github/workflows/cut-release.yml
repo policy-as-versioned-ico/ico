@@ -1,0 +1,71 @@
+name: cut-release
+
+# Ticket mo-10 (policy-as-versioned-flux). Creates a gitsign-signed, semver
+# git tag and pushes it -- the ONLY way a release starts (git push, never the
+# git-data REST API: see the hub repo's enact_guard.py governance rule).
+#
+# Signs keyless via this run's own GitHub Actions identity, not a human
+# Google/Microsoft identity: gitsign auto-detects the Actions ambient
+# credential (present because of the id-token permission below) and needs no
+# browser/device-code interaction. This is a deliberate variant of the
+# identity ADR-0001 describes for the sibling policy/fleet repos (a human,
+# chris@cns.me.uk via Google) -- an unattended agent may not drive an
+# interactive Google OAuth consent on a person's behalf, so the workflow's
+# own machine identity is the signer instead. Same keyless -> Fulcio -> Rekor
+# provenance chain; a different, equally real identity. See release.yml for
+# the matching identity-pinned verification.
+#
+# workflow_dispatch only, on purpose: this is a release-cutting ACT, not a
+# standing recurring automation.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "semver tag to cut, e.g. v1.0.0"
+        required: true
+      message:
+        description: "annotated tag message -- what changed and why"
+        required: true
+
+permissions:
+  contents: write
+  id-token: write
+
+env:
+  GITSIGN_VERSION: 0.17.1
+  GITSIGN_SHA256: 69213a8a0813a151e5a47d0060862952ff833a845d57309dff76f7ba6600abae
+
+jobs:
+  cut:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: install pinned gitsign (binary + checksum, no marketplace action)
+        run: |
+          set -euo pipefail
+          curl -sSL -o gitsign "https://github.com/sigstore/gitsign/releases/download/v${GITSIGN_VERSION}/gitsign_${GITSIGN_VERSION}_linux_amd64"
+          echo "${GITSIGN_SHA256}  gitsign" | sha256sum -c -
+          chmod +x gitsign && sudo mv gitsign /usr/local/bin/gitsign
+
+      - name: reject a tag that already exists (no force-move, ever)
+        run: |
+          set -euo pipefail
+          if git rev-parse "refs/tags/${{ inputs.version }}" >/dev/null 2>&1; then
+            echo "FAIL: ${{ inputs.version }} already exists -- tags are immutable here, cut a new version" >&2
+            exit 1
+          fi
+
+      - name: create the signed annotated tag (ambient Actions identity, no interactive login)
+        run: |
+          set -euo pipefail
+          git -c gpg.format=x509 -c gpg.x509.program=gitsign \
+            -c user.name="policy-as-versioned release bot" \
+            -c user.email="releases@${GITHUB_REPOSITORY_OWNER}.invalid" \
+            tag -s "${{ inputs.version }}" -m "${{ inputs.message }}"
+
+      - name: push the tag (git push only -- never the git-data REST API)
+        run: git push origin "${{ inputs.version }}"
