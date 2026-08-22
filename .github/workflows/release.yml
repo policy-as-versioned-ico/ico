@@ -14,8 +14,11 @@ name: release
 # run: this is ticket mo-10's "separate checkouts in separate orgs" proof
 # for ico's own gate, not just driftwood's.
 #
-# EXPECTED_IDENTITY is cut-release.yml's own Actions identity (ambient
+# EXPECTED_IDENTITY_REGEXP is cut-release.yml's own Actions identity (ambient
 # credential, no human login) -- see that workflow's header comment for why.
+# Anchored to allow main or a release/<major>.<minor>.x maintenance branch,
+# so a backport's tag (dispatched from that branch, not main) still verifies.
+# See ticket cs-14.
 #
 # Also accepts workflow_dispatch: a workflow run started BY the default
 # Actions credential (cut-release.yml's own `git push`) does not, by GitHub
@@ -40,7 +43,7 @@ env:
   TAG: ${{ inputs.tag || github.ref_name }}
   GITSIGN_VERSION: 0.17.1
   GITSIGN_SHA256: 69213a8a0813a151e5a47d0060862952ff833a845d57309dff76f7ba6600abae
-  EXPECTED_IDENTITY: https://github.com/policy-as-versioned-ico/ico/.github/workflows/cut-release.yml@refs/heads/main
+  EXPECTED_IDENTITY_REGEXP: ^https://github\.com/policy-as-versioned-ico/ico/\.github/workflows/cut-release\.yml@refs/heads/(main|release/[0-9]+\.[0-9]+\.x)$
   EXPECTED_ISSUER: https://token.actions.githubusercontent.com
 
 jobs:
@@ -79,7 +82,7 @@ jobs:
           # gitsign needs -- re-fetch the real tag ref before verifying it.
           git fetch origin "+refs/tags/${TAG}:refs/tags/${TAG}" --force
           gitsign verify-tag "${TAG}" \
-            --certificate-identity="${EXPECTED_IDENTITY}" \
+            --certificate-identity-regexp="${EXPECTED_IDENTITY_REGEXP}" \
             --certificate-oidc-issuer="${EXPECTED_ISSUER}"
 
       - name: tag still resolves to the commit this run was triggered from
@@ -103,7 +106,7 @@ jobs:
           {
             git tag -l --format='%(contents)' "${TAG}" | sed '/^-----BEGIN SIGNED MESSAGE-----$/,$d'
             echo "---"
-            echo "Verified gitsign signature (identity: ${EXPECTED_IDENTITY}, issuer: ${EXPECTED_ISSUER}). Resolved commit: ${resolved}."
+            echo "Verified gitsign signature (identity regexp: ${EXPECTED_IDENTITY_REGEXP}, issuer: ${EXPECTED_ISSUER}). Resolved commit: ${resolved}."
           } > release-notes.md
           gh release create "${TAG}" \
             --title "${TAG}" \
