@@ -1,0 +1,34 @@
+{
+  "name": "observation-lane",
+  "target": "push",
+  "enforcement": "active",
+  "bypass_actors": [
+    {
+      "actor_id": 1,
+      "actor_type": "OrganizationAdmin",
+      "bypass_mode": "always"
+    }
+  ],
+  "rules": [
+    {
+      "type": "file_path_restriction",
+      "parameters": {
+        "restricted_file_paths": [
+          ".github/workflows/**",
+          "party.yaml",
+          "composed/**",
+          "deploy/**",
+          "gitops/**",
+          "selection-policy/**",
+          "twin/**",
+          "distribution/**",
+          "graded/**",
+          "**/feed.json",
+          "**/bump.yaml",
+          "**/rule.yaml",
+          "**/*.sig"
+        ]
+      }
+    }
+  ]
+}
