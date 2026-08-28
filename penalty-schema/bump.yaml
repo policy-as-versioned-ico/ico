@@ -1,0 +1,6 @@
+# The declared bump for the NEXT penalty-schema release (ticket 04 Answer 3,
+# re-grill 13): one file per feed, beside rule.yaml, so "the next release" is
+# one unambiguous value. A human reviews it in the PR before cut-release.yml
+# tags. Nothing is pending beyond major 3, so the next release is declared
+# none until this file is edited with a real change.
+bump: none

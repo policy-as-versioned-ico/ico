@@ -1,0 +1,28 @@
+# The party artefact (ticket 04/21, ADR-0019). One signed file declaring ico:
+# what it is, what it publishes, and what it pins. Signed under the same
+# gitsign tag as everything else this repo publishes -- no second mechanism
+# (ADR-0012, ADR-0023 D3).
+#
+# roles omits adopter, so baseline is not required (ticket 04 Answer 4: every
+# publisher gets a party.yaml with roles: [publisher]; the set of publisher
+# party.yaml files IS the catalogue, there is no central one).
+#
+# inherits: ico pins nist as a controls parent (ticket 15 Answer 1). The
+# penalty-schema major 3 control_weights key on (source, id) against this
+# catalogue version, so a catalogue bump cannot orphan a weight. The version
+# is the tag minus the "v": nist tag v1.1.0.
+party: ico
+roles: [publisher]
+inherits:
+  - { party: nist, kind: controls, version: "1.1.0", since: "2026-08-28" }
+publishes:
+  - kind: feed
+    name: penalty-schema
+    path: penalty-schema
+    payload_schema: penalty-schema/payload.schema.json
+    # Withdrawal is a new version plus a listing here, never a deleted tag
+    # (ADR-0019 point 6). Nothing is withdrawn.
+    revoked: []
+overlay:
+  add: []
+  restate: []

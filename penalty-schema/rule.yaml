@@ -1,0 +1,9 @@
+# What "changed" means for the penalty-schema feed (ADR-0023, D2). One rule
+# per feed, beside the feed's payload schema, not per major: the scheduled
+# fetch computes a bump against the newest published major and opens a PR
+# only when the bump is not none; anything below lands on the observation
+# branch. Flat key: value so feeds/bump.py reads it with the standard library.
+feed: penalty-schema
+changed_when: "any formula rate or cap changes, any real_example added, any weight changes"
+entries: regimes
+numeric_tolerance: 0

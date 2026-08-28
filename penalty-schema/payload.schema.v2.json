@@ -1,0 +1,48 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://policy-as-versioned.dev/schema/ico-penalty-schema-payload-v2.json",
+  "title": "ico penalty-schema feed payload, majors 1 and 2",
+  "description": "The payload half of the one feed envelope (ADR-0019) for ico's penalty-schema feed, majors 1 and 2. regime -> violation type -> fine formula and cap, grounded in real public enforcement notices. Superseded by payload.schema.json (major 3), which adds control_weights; the two schemas exist side by side because a payload_schema change is always a major and a consumer pinned to v1 or v2 still validates against this file.",
+  "type": "object",
+  "required": ["note", "regimes"],
+  "additionalProperties": false,
+  "properties": {
+    "note": { "type": "string", "minLength": 1 },
+    "changelog": { "type": "string", "minLength": 1 },
+    "regimes": {
+      "type": "object",
+      "minProperties": 1,
+      "description": "Keyed by regime name, e.g. uk-gdpr. The name an adopter declares in its obligations.",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["authority", "statute", "currency", "violation_types"],
+        "additionalProperties": false,
+        "properties": {
+          "authority": { "type": "string", "minLength": 1 },
+          "statute": { "type": "string", "minLength": 1 },
+          "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+          "violation_types": {
+            "type": "object",
+            "minProperties": 1,
+            "additionalProperties": {
+              "type": "object",
+              "required": ["description", "formula"],
+              "additionalProperties": false,
+              "properties": {
+                "description": { "type": "string", "minLength": 1 },
+                "formula": {
+                  "type": "object",
+                  "required": ["type"],
+                  "description": "One of pct_of_global_turnover, per_month_escalating, per_violation_tier, pct_of_relevant_revenue_plus_discretion. Each carries its own rate, cap or band fields; the converter beside this feed reads them.",
+                  "properties": { "type": { "type": "string", "minLength": 1 } }
+                },
+                "real_examples_gbp": { "type": "array", "items": { "type": "object" } },
+                "real_examples_usd": { "type": "array", "items": { "type": "object" } }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
