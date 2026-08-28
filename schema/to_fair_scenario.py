@@ -44,7 +44,7 @@ def _examples(vt: dict, currency_key: str) -> list[float]:
     return [e[f"fine_{currency_key.lower()}"] for e in vt.get(key, []) if f"fine_{currency_key.lower()}" in e]
 
 
-def lm_triple(regime: dict, vt: dict) -> tuple[float, float, float]:
+def lm_triple(regime: dict, vt: dict, turnover: float | None = None) -> tuple[float, float, float]:
     currency = regime["currency"]
     f = vt["formula"]
     ex = _examples(vt, currency)
@@ -59,6 +59,16 @@ def lm_triple(regime: dict, vt: dict) -> tuple[float, float, float]:
         # example can exceed today's cap (e.g. BA/Marriott were fined under the
         # pre-Brexit EU GDPR cap) -- the triple must still satisfy lo<=mode<=hi.
         hi = max(f.get("cap_gbp") or 0, max(ex) * 1.2, mode)
+        # SIZED. The real examples are fines on other, much larger balance
+        # sheets. Given the subscriber's own signed turnover, the percentage
+        # formula gives THAT party's exposure, and the published examples scale
+        # by the same ratio -- one factor, so lo<=mode<=hi survives it. With no
+        # turnover (unsigned, or signed too long ago to stand) the triple is
+        # left at the statutory cap: a stale size widens, it never refuses.
+        cap, rate = float(f.get("cap_gbp") or 0), f.get("rate")
+        if turnover is not None and cap and rate:
+            scale = (float(rate) * float(turnover)) / cap
+            lo, mode, hi = lo * scale, mode * scale, hi * scale
         return (float(lo), float(mode), float(hi))
 
     if t == "per_violation_tier":
@@ -76,7 +86,8 @@ def lm_triple(regime: dict, vt: dict) -> tuple[float, float, float]:
 
 
 def build_scenario(schema: dict, regime_name: str, vt_name: str, also=(),
-                    warn_lef=DEFAULT_WARN_LEF, deny_lef=DEFAULT_DENY_LEF) -> dict:
+                    warn_lef=DEFAULT_WARN_LEF, deny_lef=DEFAULT_DENY_LEF,
+                    turnover: float | None = None) -> dict:
     """also: further (regime_name, vt_name) pairs whose consequence the SAME
     breach can also draw -- an ICO fine and a PCI penalty on one incident, say
     (ticket 18). Emits a single lm triple for one source (unchanged shape), or
@@ -89,14 +100,17 @@ def build_scenario(schema: dict, regime_name: str, vt_name: str, also=(),
     for r_name, v_name in sources:
         regime = schema["regimes"][r_name]
         vt = regime["violation_types"][v_name]
-        lms.append(lm_triple(regime, vt))
+        lms.append(lm_triple(regime, vt, turnover))
         names.append(f"{r_name}/{v_name}")
         regimes_used.append(regime)
     lm = lms[0] if len(lms) == 1 else [list(t) for t in lms]
     if len(lms) == 1:
         r = regimes_used[0]
         note = (f"lm sourced from {r['authority']} real public fines ({r['statute']}). "
-                f"warn/deny lef are editorial (schema doesn't carry frequency).")
+                f"warn/deny lef are editorial (schema doesn't carry frequency)."
+                + (f" Scaled to a subscriber turnover of {turnover:,.2f} {r['currency']}."
+                   if turnover is not None else
+                   " Not sized to any subscriber: priced at the statutory cap."))
     else:
         cites = "; ".join(f"{r['authority']} ({r['statute']})" for r in regimes_used)
         note = (f"lm sourced from real public fines, cited per source: {cites}. "
@@ -141,6 +155,23 @@ def selfcheck():
         assert lo <= mode <= hi, (combined, lo, mode, hi)
     print("ok  combining uk-gdpr + pci-dss on one breach yields 2 lo<=mode<=hi triples, not 1")
 
+    # SIZED. A subscriber's own turnover moves the triple, and a party with a
+    # smaller balance sheet than the statutory cap prices smaller -- the whole
+    # point of shipping the converter beside the feed (spec, the £ seam).
+    gdpr = v2["regimes"]["uk-gdpr"]["violation_types"]["lower-tier"]
+    unsized = lm_triple(v2["regimes"]["uk-gdpr"], gdpr)
+    small = lm_triple(v2["regimes"]["uk-gdpr"], gdpr, turnover=86_000_000)
+    big = lm_triple(v2["regimes"]["uk-gdpr"], gdpr, turnover=5_000_000_000)
+    for lo, mode, hi in (unsized, small, big):
+        assert lo <= mode <= hi, (lo, mode, hi)
+    assert small[2] < unsized[2], (small, unsized)
+    assert big[2] > unsized[2], (big, unsized)
+    assert small != unsized and big != small
+    rate = gdpr["formula"]["rate"]
+    cap = gdpr["formula"]["cap_gbp"]
+    assert abs(small[2] - unsized[2] * (rate * 86_000_000) / cap) < 1e-6
+    print("ok  a subscriber's own turnover scales the lm triple; no turnover stays at the cap")
+
 
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
@@ -153,6 +184,11 @@ def main(argv=None):
     pc.add_argument("--also", action="append", default=[], metavar="REGIME:VIOLATION_TYPE",
                      help="fold another obligation source's consequence into the same breach "
                           "(repeatable) -- ticket 18")
+    pc.add_argument("--turnover", type=float, default=None,
+                     help="the SUBSCRIBER's own signed annual turnover, in the regime's own "
+                          "currency. Percent-of-turnover formulas scale to it, so the price is "
+                          "that party's and no fixture's. Omit it (or pass a stale size, which "
+                          "the caller omits for you) and the triple stays at the statutory cap.")
     pc.add_argument("-o", "--out", help="write scenario JSON here (default: stdout)")
 
     sub.add_parser("selfcheck", help="assert every schema entry yields a valid lm triple")
@@ -171,7 +207,8 @@ def main(argv=None):
     with open(args.schema) as fh:
         schema = json.load(fh)
     also = [tuple(a.split(":", 1)) for a in args.also]
-    scenario = build_scenario(schema, args.regime, args.violation_type, also=also)
+    scenario = build_scenario(schema, args.regime, args.violation_type, also=also,
+                               turnover=args.turnover)
     out = json.dumps(scenario, indent=2)
     if args.out:
         with open(args.out, "w") as fh:
