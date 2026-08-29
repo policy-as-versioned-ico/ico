@@ -65,6 +65,16 @@ jobs:
           fi
           echo "OK: ${file} declares ${declared}"
 
+      # Ticket 43 (18 Answer 5): the bump is DECLARED in a reviewed file and
+      # the gate refuses when the computed bump disagrees -- before the tag
+      # exists, so a wrong number is never signed. The dispatch input reaches
+      # the script through `env:`, never interpolated into the command line
+      # (the same rule cut-release-normalize.py states in platform).
+      - name: "the declared bump must agree with the computed bump (ticket 43, 18 Answer 5)"
+        env:
+          VERSION_INPUT: ${{ inputs.version }}
+        run: python3 .github/scripts/declared-bump-gate.py "${VERSION_INPUT}"
+
       - name: reject a tag that already exists (no force-move, ever)
         run: |
           set -euo pipefail
