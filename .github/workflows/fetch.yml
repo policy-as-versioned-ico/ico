@@ -1,0 +1,208 @@
+name: fetch
+
+# ico's publisher clock (ticket 28; ADR-0024, decisions D1 and D2).
+# 04:09 UTC, ico's own choice. No cross-org ordering is promised: every
+# org picks its own time, GitHub delays scheduled runs under load, and every
+# joint in this chain waits on a human merge anyway.
+#
+# What it does, once a day: read what THIS repository has published -- every
+# entry on its own party.yaml `publishes[]` -- and append one dated line per
+# entry to observations/<feed>.jsonl on the `observations` branch, carrying the
+# newest published version and the sha256 of its payload. That is a series, not
+# a release. A run of identical hashes is evidence that nothing moved; a hash
+# that moves without a version moving is a tamper this clock can see.
+#
+# D1 in one sentence: this clock appends observations and never commits a
+# declaration. It writes nothing to main -- not a feed, not a bump, not a pin --
+# and the cage step fails the run if anything outside the observation lane is
+# left in the tree. The observation commit is gitsign-signed by this workflow's
+# own Actions identity, the same keyless OIDC -> Fulcio -> Rekor chain
+# cut-release.yml already uses for tags, so the lane is a cage rather than a
+# policy statement once .github/rulesets/observation-lane.json is applied.
+#
+# ponytail: this repository ships no upstream fetcher yet, so the clock observes
+# what is published rather than comparing it against an upstream. The shape to
+# copy when it does is the feeds repo's own .github/workflows/fetch.yml plus its
+# fetch/lib.py: compute the bump under the feed's own rule.yaml, open a PR when
+# the bump is not `none` (D2), and fall through to this same observation branch
+# when it is. Nothing here changes when that lands.
+
+on:
+  schedule:
+    - cron: "09 4 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  id-token: write
+
+# The observation lane, declared once as data so the cage step and
+# verify/schedules/verify-schedules.sh read the SAME list (ADR-0024, D1). These
+# are the only paths any scheduled job in this repository may ever commit.
+env:
+  OBSERVATION_LANE: "talk/truth.log drift/samples.jsonl talk/captures observations"
+  GITSIGN_VERSION: 0.17.1
+  GITSIGN_SHA256: 69213a8a0813a151e5a47d0060862952ff833a845d57309dff76f7ba6600abae
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: install pinned gitsign (binary + checksum, no marketplace action)
+        run: |
+          set -euo pipefail
+          curl -sSL -o gitsign "https://github.com/sigstore/gitsign/releases/download/v${GITSIGN_VERSION}/gitsign_${GITSIGN_VERSION}_linux_amd64"
+          echo "${GITSIGN_SHA256}  gitsign" | sha256sum -c -
+          chmod +x gitsign && sudo mv gitsign /usr/local/bin/gitsign
+          rm -f gitsign
+
+      - name: read what this publisher has published, and hash it
+        run: |
+          set -euo pipefail
+          pip install --quiet pyyaml
+          mkdir -p "${RUNNER_TEMP}/obs"
+          python3 - <<'PY'
+          import datetime as dt, glob, hashlib, json, os, re, sys
+          import yaml
+
+
+          def declared_bump(feed_dir):
+              """The bump this publisher has queued, from <path>/bump.yaml's one
+              line. Flat key: value, read with the standard library on purpose --
+              the same shape and the same reason as every feed's rule.yaml."""
+              path = os.path.join(feed_dir, "bump.yaml")
+              if not os.path.exists(path):
+                  return None
+              for line in open(path):
+                  if line.startswith("bump:"):
+                      return line.partition(":")[2].strip()
+              return None
+
+
+          def newest(feed_dir):
+              """(version, path) of the newest published v<N>/feed.json, or None."""
+              found = []
+              for path in glob.glob(os.path.join(feed_dir, "v*", "feed.json")):
+                  major = re.fullmatch(r"v(\d+)", os.path.basename(os.path.dirname(path)))
+                  if major:
+                      found.append((int(major.group(1)), path))
+              return sorted(found)[-1] if found else None
+
+
+          out = os.path.join(os.environ["RUNNER_TEMP"], "obs")
+          now = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+          party = yaml.safe_load(open("party.yaml")) or {}
+          published = party.get("publishes") or []
+          if not published:
+              sys.exit("REFUSED: party.yaml declares no publishes[] -- a publisher clock with "
+                       "nothing to observe is a clock lying about being one")
+          for entry in published:
+              name = entry.get("name")
+              if not name:
+                  continue
+              feed_dir = entry.get("path") or name
+              line = {"observed_at": now, "publisher": party.get("party"), "feed": name,
+                      "kind": entry.get("kind"), "declared_bump": declared_bump(feed_dir),
+                      "revoked": entry.get("revoked") or []}
+              found = newest(feed_dir)
+              if found:
+                  doc = json.load(open(found[1]))
+                  body = json.dumps(doc.get("payload"), sort_keys=True,
+                                    separators=(",", ":")).encode()
+                  line.update(published_version=doc.get("version"),
+                              published_at=doc.get("published_at"),
+                              payload_sha256=hashlib.sha256(body).hexdigest())
+              else:
+                  line.update(published_version=None, payload_sha256=None,
+                              note=f"no {feed_dir}/v<N>/feed.json in this repository yet -- "
+                                   f"this clock records that it looked and found none, which "
+                                   f"is a fact with a date on it, not a silence")
+              with open(os.path.join(out, f"{name}.jsonl"), "a") as fh:
+                  fh.write(json.dumps(line, sort_keys=True) + "\n")
+              print(json.dumps(line, sort_keys=True))
+          PY
+
+      - name: append the observations to the observations branch
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=("${RUNNER_TEMP}"/obs/*.jsonl)
+          if [ ${#files[@]} -eq 0 ]; then echo "nothing observed"; exit 0; fi
+          if git ls-remote --exit-code --heads origin observations >/dev/null 2>&1; then
+            git fetch origin observations:observations
+            git checkout observations
+          else
+            git checkout --orphan observations
+            git rm -rf --cached . >/dev/null 2>&1 || true
+            # `git clean -ffdx -e .git`, not `rm -rf ./*`: the glob does not match
+            # dot entries, so .github/ and .gitignore survived the wipe and the
+            # cage step below then read them as untracked files OUTSIDE the lane
+            # and failed the run. Every publisher's FIRST run died there, so the
+            # observations branch never came into existence at all, and the next
+            # run took the same path and died the same way (reproduced 2026-08-28).
+            git clean -ffdx -e .git >/dev/null
+            mkdir -p observations
+            printf '%s\n' \
+              "# observations" "" \
+              "Dated readings from .github/workflows/fetch.yml (ADR-0024, D1/D2)." \
+              "One JSON line per published feed per run. Never a declaration:" \
+              "nothing here is published, pinned or enforced. The series exists so" \
+              "that a day on which nothing changed is still a fact with a date on it." \
+              > observations/README.md
+          fi
+          mkdir -p observations
+          for f in "${files[@]}"; do
+            cat "$f" >> "observations/$(basename "$f")"
+          done
+
+      # --- the cage (ADR-0024, D1) -------------------------------------------
+      # Only OBSERVATION_LANE paths are staged. Anything else left in the tree is
+      # a declaration escaping the lane, and this step fails the run rather than
+      # pushing it. The commit is signed with this run's own Actions identity.
+      - name: the observation cage -- a clock appends observations, never a declaration
+        run: |
+          set -euo pipefail
+          # `git reset` FIRST: the cage builds the index and nothing else. The old
+          # guard filtered `git status --porcelain` with `grep -v '^[AMD] '`, which
+          # strips exactly the staged-and-clean entries -- so a declaration any
+          # earlier step had left in the index was committed and pushed while this
+          # step printed "this clock declared nothing" (review, 2026-08-28).
+          git reset -q
+          for path in ${OBSERVATION_LANE}; do
+            # -f: talk/captures/ is gitignored for local runs; the clock is the one
+            # caller allowed to commit it.
+            if [ -e "${path}" ]; then git add -Af -- "${path}"; fi
+          done
+          # The STAGED set, judged against the same OBSERVATION_LANE list, never a
+          # second regex that could drift from it.
+          bad=""
+          for f in $(git diff --cached --name-only); do
+            ok=0
+            for path in ${OBSERVATION_LANE}; do
+              case "${f}" in "${path}"|"${path}"/*) ok=1 ;; esac
+            done
+            [ "${ok}" = 1 ] || bad="${bad} ${f}"
+          done
+          if [ -n "${bad}" ]; then
+            echo "::error::this clock staged a declaration outside the observation lane"
+            echo "${bad}"
+            exit 1
+          fi
+          outside="$(git status --porcelain --untracked-files=all | grep -v '^[AMD] ' || true)"
+          if [ -n "${outside}" ]; then
+            echo "::error::the scheduled fetch left a change outside the observation lane"
+            echo "${outside}"
+            exit 1
+          fi
+          if git diff --cached --quiet; then
+            echo "ok  nothing to observe, and nothing declared"; exit 0
+          fi
+          git -c gpg.format=x509 -c gpg.x509.program=gitsign \
+            -c user.name="ico publisher clock" \
+            -c user.email="fetch-bot@policy-as-versioned-ico.invalid" \
+            commit -S -m "observe ico's published feeds"
+          git push origin observations

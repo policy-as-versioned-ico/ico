@@ -1,0 +1,14 @@
+# The declared bump for the NEXT penalty-schema release (ticket 04 Answer 3,
+# re-grill 13): one file per feed, beside rule.yaml, so "the next release" is
+# one unambiguous value. A human reviews it in the PR before cut-release.yml
+# tags.
+#
+# CORRECTED 2026-08-29 (ticket 43): this said `none` while v3/feed.json sat in
+# the tree untagged, carrying a new payload_schema and a control_weights
+# section that v2 does not have. The next release IS v3.0.0 and it is a major.
+# `none` was not a statement about v3, it was a statement made before v3
+# existed and never revisited -- which is exactly the disagreement
+# .github/scripts/declared-bump-gate.py was built to refuse, and did refuse the
+# first time it ran (ticket 18 Answer 5). Set this back to `none` once v3.0.0
+# is tagged and nothing further is queued.
+bump: major

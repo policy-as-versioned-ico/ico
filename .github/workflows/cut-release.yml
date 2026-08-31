@@ -51,6 +51,30 @@ jobs:
           echo "${GITSIGN_SHA256}  gitsign" | sha256sum -c -
           chmod +x gitsign && sudo mv gitsign /usr/local/bin/gitsign
 
+      - name: "the tag must name a real, released feed version (ADR-0019: envelope version == tag)"
+        run: |
+          set -euo pipefail
+          version="${{ inputs.version }}"; version="${version#v}"
+          major="${version%%.*}"
+          file="penalty-schema/v${major}/feed.json"
+          [ -f "${file}" ] || { echo "FAIL: ${file} does not exist" >&2; exit 1; }
+          declared=$(python3 -c "import json;print(json.load(open('${file}'))['version'])")
+          if [ "${declared}" != "${version}" ]; then
+            echo "FAIL: ${file} declares ${declared}, tag says ${version}" >&2
+            exit 1
+          fi
+          echo "OK: ${file} declares ${declared}"
+
+      # Ticket 43 (18 Answer 5): the bump is DECLARED in a reviewed file and
+      # the gate refuses when the computed bump disagrees -- before the tag
+      # exists, so a wrong number is never signed. The dispatch input reaches
+      # the script through `env:`, never interpolated into the command line
+      # (the same rule cut-release-normalize.py states in platform).
+      - name: "the declared bump must agree with the computed bump (ticket 43, 18 Answer 5)"
+        env:
+          VERSION_INPUT: ${{ inputs.version }}
+        run: python3 .github/scripts/declared-bump-gate.py "${VERSION_INPUT}"
+
       - name: reject a tag that already exists (no force-move, ever)
         run: |
           set -euo pipefail
