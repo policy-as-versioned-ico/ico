@@ -14,12 +14,14 @@ The signed penalty schema (`penalty-schema/v*/feed.json`) carries an `authority`
 regime, for example `ICO (Information Commissioner's Office)`. That value is a **citation of the
 body that levied the real fines the schema's magnitudes are drawn from** — the provenance of the
 number — and not a claim that this party is, represents or publishes on behalf of that body. Every
-magnitude is sourced from a public enforcement notice, final notice or resolution agreement, and
+magnitude is sourced from a public enforcement notice, final notice or resolution agreement (or,
+for `pci-dss`, the published card-scheme bands; the statutory caps and tiers come from statute), and
 each entry names its source.
 
 Each real example records the organisation, the year, the figure as levied in the notice (and,
-where the notice itself reduced a proposed figure, that proposed figure) and its source. That is
-all it records. No version of the schema records whether a figure was later reduced on appeal,
+where the notice itself reduced a proposed figure, that proposed figure) and its source, except
+the `pci-dss` entry, which records a note of the published bands and its source. That is all it
+records. No version of the schema records whether a figure was later reduced on appeal,
 overturned or never collected, so a figure here is the notice figure on the date cited and may
 be stale. The hub's ticket 79 plans to add a `status` and a `final_as_of` per example and to
 correct the stale figures it has identified in a new major version; until that lands, a stale
