@@ -33,7 +33,8 @@ for bad in \
   "https://github.com/policy-as-versioned-ico/ico/.github/workflows/cut-release.yml@refs/heads/maint/1.0" \
   "https://evil.example/https://github.com/policy-as-versioned-ico/ico/.github/workflows/cut-release.yml@refs/heads/main" \
   "https://github.com/policy-as-versioned-ico/ico/.github/workflows/cut-release.yml@refs/heads/mainX" \
-  "https://githubXcom/policy-as-versioned-ico/ico/.github/workflows/cut-release.yml@refs/heads/main"
+  "https://githubXcom/policy-as-versioned-ico/ico/.github/workflows/cut-release.yml@refs/heads/main" \
+  "https://github.com/policy-as-versioned-ico/ico/.github/workflows/propose-tier.yml@refs/heads/main"
 do
   matches "$bad" && fail "foreign/malformed identity incorrectly matched: $bad"
   echo "ok  rejected: $bad"
