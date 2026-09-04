@@ -3,6 +3,8 @@
 **GitHub org:** [`policy-as-versioned-ico`](https://github.com/policy-as-versioned-ico) ·
 **Role:** regulator — publisher · **Licence:** [Apache-2.0](LICENSE)
 
+*A demonstration party, not affiliated with, endorsed by or speaking for any real authority it names.* See [DISCLAIMER.md](DISCLAIMER.md).
+
 Part of the *Policy as Versioned Code* estate: a shared platform, two regulators, three regulated
 institutions, each its own independent GitHub organisation, exchanging signed, versioned
 dependencies. A regulator publishes controls or penalties as a signed, versioned artefact and bears
