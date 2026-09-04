@@ -43,6 +43,17 @@ env:
   TAG: ${{ inputs.tag || github.ref_name }}
   GITSIGN_VERSION: 0.17.1
   GITSIGN_SHA256: 69213a8a0813a151e5a47d0060862952ff833a845d57309dff76f7ba6600abae
+  # Ticket 77 item 4. This job checks `platform` out to use its schema and its engine as
+  # the RULER its own release gate is graded by, and did so at platform's DEFAULT BRANCH --
+  # an unpinned, unsigned consumption of another organisation, which is exactly what this
+  # estate tells its adopters never to do (NORTH-STAR section 2). The pin is a {tag, commit}
+  # pair like every other cross-org pin here. It lives in this file's `env:` and not in a
+  # gitops/ pin file because ico runs no cluster and carries no renovate.json, so a pin
+  # file would gain nothing a constant beside GITSIGN_VERSION above does not already give;
+  # the day ico gains a Renovate config, this moves to gitops/platform/platform-pin.yaml
+  # in the insurer's shape. Bumping it is a reviewed pull request that edits both lines.
+  PLATFORM_TAG: v2.0.1
+  PLATFORM_COMMIT: 533dccb0a823001b396fd60ab08014bf75065a37
   EXPECTED_IDENTITY_REGEXP: ^https://github\.com/policy-as-versioned-ico/ico/\.github/workflows/cut-release\.yml@refs/heads/(main|release/[0-9]+\.[0-9]+\.x)$
   EXPECTED_ISSUER: https://token.actions.githubusercontent.com
 
@@ -60,6 +71,17 @@ jobs:
         with:
           repository: policy-as-versioned-platform/platform
           path: platform
+          ref: ${{ env.PLATFORM_TAG }}
+
+      - name: platform is at the {tag, commit} pair this workflow pins
+        run: |
+          set -euo pipefail
+          head="$(git -C platform rev-parse HEAD)"
+          if [ "${{ env.PLATFORM_COMMIT }}" != "${head}" ]; then
+            echo "REFUSED: platform is at ${head}, but this workflow pins ${{ env.PLATFORM_TAG }} at ${{ env.PLATFORM_COMMIT }}" >&2
+            exit 1
+          fi
+          echo "ok  platform is ${{ env.PLATFORM_TAG }} (${{ env.PLATFORM_COMMIT }})"
 
       - name: install pinned gitsign (binary + checksum, no marketplace action)
         run: |
