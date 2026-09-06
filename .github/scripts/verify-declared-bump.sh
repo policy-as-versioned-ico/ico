@@ -5,7 +5,16 @@
 #   1. the ladder itself, on fixtures (--selfcheck);
 #   2. the REAL declaration against the REAL tree (--tree) -- the same
 #      question .github/workflows/cut-release.yml asks before it tags.
-# Exit 0 observed true, 3 could-not-look, non-zero observed false.
+#
+# CORRECTED 2026-09-06 (eco-system ticket 67 item (b)): --tree asks about the
+# NEXT release, not the gap between the two newest published majors, and it
+# REFUSES rather than shrugs. The hub's talk/verify-manifest.txt declares no
+# could-not-look for this row, so an exit 3 here grades FAIL in the gate anyway;
+# a named refusal says more than a shrug that is failed for being one. The
+# exit-3 branch below is kept for a future --tree that has a real reason not to
+# look, and says so if it is ever taken.
+# Exit 0 observed true, 3 could-not-look (nothing takes it today), non-zero
+# observed false.
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$here"
