@@ -11,4 +11,13 @@
 # .github/scripts/declared-bump-gate.py was built to refuse, and did refuse the
 # first time it ran (ticket 18 Answer 5). Set this back to `none` once v3.0.0
 # is tagged and nothing further is queued.
-bump: major
+#
+# RESET 2026-09-06 (eco-system ticket 67 item (b)), which is what the line
+# above asked for. v3.0.0 is tagged on the real remote (`v3.0.0^{}` resolves to
+# 9d09222) and `git diff v3.0.0 origin/main -- penalty-schema` is empty, so
+# nothing is queued and the next release would publish no content change: none.
+# The gate's `--tree` mode was corrected in the same commit, because it had been
+# answering a different question -- the bump between the two newest PUBLISHED
+# majors, which is a fact about the LAST release and stays `major` forever -- so
+# following the instruction above would have turned the gate red.
+bump: none
