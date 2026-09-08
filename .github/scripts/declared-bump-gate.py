@@ -38,6 +38,7 @@ import json
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
@@ -228,6 +229,155 @@ def main(argv):
     return grade(tag, read_flat(FEED_DIR / "bump.yaml", "bump"))
 
 
+class _Planted:
+    """A throwaway ico-shaped repository for --selfcheck: penalty-schema/ with rule.yaml, bump.yaml
+    and one feed per major, committed and tagged under a hook-free git. The owner's global
+    pre-commit hook is a rate-limited network call (estate note, 2026-09-06), so every git call
+    here pins core.hooksPath to an empty directory and signs nothing."""
+
+    def __init__(self, root, name):
+        self.repo = Path(root) / name
+        self.hooks = Path(root) / "no-hooks"
+        self.hooks.mkdir(exist_ok=True)
+        self.repo.mkdir()
+        self.git("init", "-q", "-b", "main")
+        (self.repo / "penalty-schema").mkdir()
+        (self.repo / "penalty-schema" / "rule.yaml").write_text(
+            'feed: penalty-schema\nchanged_when: "planted"\nentries: regimes\n')
+
+    def git(self, *args):
+        return subprocess.run(["git", "-c", f"core.hooksPath={self.hooks}",
+                               "-c", "user.name=selfcheck", "-c", "user.email=selfcheck@invalid",
+                               "-c", "commit.gpgsign=false", "-c", "tag.gpgsign=false",
+                               "-C", str(self.repo), *args],
+                              capture_output=True, text=True, check=True).stdout
+
+    def feed(self, major, regimes, schema="penalty-schema/payload.schema.json"):
+        path = self.repo / "penalty-schema" / f"v{major}" / "feed.json"
+        path.parent.mkdir(exist_ok=True)
+        path.write_text(json.dumps({"kind": "feed", "name": "penalty-schema",
+                                    "version": f"{major}.0.0", "published_by": "ico",
+                                    "payload_schema": schema,
+                                    "payload": {"note": "x", "regimes": regimes}}, indent=1))
+
+    def commit(self, message):
+        self.git("add", "-A")
+        self.git("commit", "-q", "-m", message)
+
+    def tag(self, name):
+        self.git("tag", name)
+
+    def clone(self, name, *flags):
+        dst = self.repo.parent / name
+        subprocess.run(["git", "clone", "-q", *flags, str(self.repo), str(dst)],
+                       capture_output=True, text=True, check=True)
+        return dst
+
+
+@contextlib.contextmanager
+def _at(repo):
+    """Point the gate at a planted repository for the duration of one case."""
+    global REPO, FEED_DIR
+    saved = REPO, FEED_DIR
+    REPO, FEED_DIR = Path(repo), Path(repo) / "penalty-schema"
+    try:
+        yield
+    finally:
+        REPO, FEED_DIR = saved
+
+
+def _run(entry, *args):
+    """(exit code, everything printed) of one gate entry point."""
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+        code = entry(*args)
+    return code, out.getvalue().strip()
+
+
+def _expect(label, got, code, *phrases):
+    """One selfcheck verdict: the exit code and every phrase the output must carry."""
+    have, text = got
+    missing = [p for p in phrases if p not in text]
+    if have != code or missing:
+        raise AssertionError(f"{label}: expected exit {code} naming {list(phrases)}, got exit "
+                             f"{have} (missing {missing}): {text.splitlines()[-1] if text else '<nothing>'}")
+    print(f"ok  {label}")
+
+
+REGIMES = {"uk_gdpr": {"cap": 1}, "pecr": {"cap": 2}}
+MORE = {**REGIMES, "fca": {"cap": 3}}
+
+
+def _case_1_predecessor_at_the_tag(tmp):
+    """Ticket 103 (1): a major's FIRST release reads the major below AT ITS TAG, and an edit to
+    that major made after its tag and never released is a queued release, refused by name."""
+    p = _Planted(tmp, "one")
+    p.feed(1, REGIMES)
+    p.commit("v1")
+    p.tag("v1.0.0")
+    p.feed(1, MORE)                                    # an unreleased edit to the newest major
+    p.feed(2, MORE, schema="penalty-schema/payload.schema.v2.json")
+    p.commit("v1 edited after its tag, v2 queued")
+    with _at(p.repo):
+        _expect("(1) a first release of v2 refuses v1's unreleased edit, naming the tag it drifted from",
+                _run(grade, "v2.0.0", "major"), 1, "penalty-schema/v1/feed.json", "v1.0.0", "differs")
+    p.feed(1, REGIMES)                                 # what v1.0.0 published, byte for byte
+    p.commit("v1 back to what v1.0.0 published")
+    with _at(p.repo):
+        _expect("(1) ...and admits it once v1 on disk is what v1.0.0 published",
+                _run(grade, "v2.0.0", "major"), 0, "v1.0.0 -> v2.0.0", "'major'")
+
+
+def _case_2_the_tag_is_the_declared_bump(tmp):
+    """Ticket 103 (2): the tag must equal bump(previous released tag, declared)."""
+    p = _Planted(tmp, "two")
+    p.feed(1, REGIMES)
+    p.commit("v1")
+    p.tag("v1.0.0")
+    p.feed(1, MORE)                                    # a minor change to v1
+    p.commit("a regime added")
+    with _at(p.repo):
+        _expect("(2) v1.1.0 declared minor over v1.0.0 is admitted",
+                _run(grade, "v1.1.0", "minor"), 0, "v1.0.0 -> v1.1.0")
+        _expect("(2) v1.0.1 declared minor is refused: the tag is a patch increment",
+                _run(grade, "v1.0.1", "minor"), 1, "v1.0.1", "'patch'", "'minor'")
+        _expect("(2) --tree derives v1.1.0 from the declared minor and admits it",
+                _run(tree, "minor"), 0, "v1.0.0 -> v1.1.0")
+        _expect("(2) --tree refuses a declared none while the tree carries a minor",
+                _run(tree, "none"), 1, "'none'", "'minor'")
+    p.feed(2, MORE)
+    p.commit("v2 queued")
+    with _at(p.repo):
+        _expect("(2) v2.0.0 declared minor is refused: the tag is a major increment",
+                _run(grade, "v2.0.0", "minor"), 1, "v2.0.0", "'major'", "'minor'")
+    p.feed(1, REGIMES)                                 # nothing queued on v1
+    p.commit("v1 unchanged again")
+    with _at(p.repo):
+        _expect("(2) v1.0.1 declared none is refused: no tag carries none",
+                _run(grade, "v1.0.1", "none"), 1, "'none'", "no release is queued")
+
+
+def _case_3_no_tags_in_this_clone(tmp):
+    """Ticket 103 (3): an empty tag list is told apart from a repository that never released."""
+    p = _Planted(tmp, "three")
+    p.feed(1, REGIMES)
+    p.commit("v1")
+    p.tag("v1.0.0")
+    with _at(p.clone("three-no-tags", "--no-tags")):
+        _expect("(3) a --no-tags clone of a released repository is refused, not graded as a first release",
+                _run(grade, "v1.0.1", "patch"), 1, "no tags in this clone")
+        _expect("(3) ...and --tree refuses the same way",
+                _run(tree, "none"), 1, "no tags in this clone")
+    q = _Planted(tmp, "four")
+    q.feed(1, REGIMES)
+    q.commit("v1, never released")
+    with _at(q.clone("four-clone")):
+        _expect("(3) a clone of a repository that never released takes the first-release path",
+                _run(grade, "v1.0.0", "major"), 0, "first")
+        _expect("(3) ...and --tree names v1.0.0 as that first release",
+                _run(tree, "major"), 0, "v1.0.0", "first")
+
+
 def selfcheck():
     def feed(entries, schema="penalty-schema/payload.schema.json"):
         return {"kind": "feed", "name": "penalty-schema", "version": "1.0.0",
@@ -256,6 +406,22 @@ def selfcheck():
     assert refused == 1, "--tree must refuse a declaration that is not on the ladder"
     assert "nonsense" in planted.getvalue(), "the refusal must name what it refused"
     print("ok  --tree refuses a declaration off the ladder rather than shrugging at it")
+
+    # ticket 103: three ways the gate could agree about a number a release would not carry. Each
+    # case plants a repository and runs the real entry points; every case is reported, not the
+    # first to fail, so a red run names everything that is red.
+    failed = []
+    with tempfile.TemporaryDirectory() as tmp:
+        for case in (_case_1_predecessor_at_the_tag, _case_2_the_tag_is_the_declared_bump,
+                     _case_3_no_tags_in_this_clone):
+            try:
+                case(tmp)
+            except AssertionError as exc:
+                failed.append(str(exc))
+                print(f"FAIL {exc}")
+    if failed:
+        print(f"FAIL: {len(failed)} ticket-103 selfcheck case(s) red", file=sys.stderr)
+        return 1
     return 0
 
 
