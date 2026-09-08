@@ -13,6 +13,12 @@
 # a named refusal says more than a shrug that is failed for being one. The
 # exit-3 branch below is kept for a future --tree that has a real reason not to
 # look, and says so if it is ever taken.
+#
+# CORRECTED 2026-09-08 (eco-system ticket 103): --tree derives the next tag from
+# the declaration and refuses a tag that is not that bump of the newest release,
+# reads the predecessor AT ITS TAG, and tells "no tags in this clone" apart from
+# "never released" by asking origin -- the one call that is not offline, reached
+# only when this checkout holds no release tag at all. This clone holds them.
 # Exit 0 observed true, 3 could-not-look (nothing takes it today), non-zero
 # observed false.
 set -euo pipefail
