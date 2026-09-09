@@ -1,0 +1,386 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://policy-as-versioned.dev/schema/ico-penalty-schema-payload.json",
+  "title": "ico penalty-schema feed payload, major 4",
+  "description": "The payload half of the one feed envelope (ADR-0019) for ico's penalty-schema feed, major 4. Major 3's regimes and control_weights, plus three things eco-system ticket 79 required before any of these figures may be shown to an audience. (1) FINALITY AND SOURCING: every real example carries `source`, `status`, `final_as_of` and `litigation`, so a penalty under appeal cannot price as if it were final. Only `final` and `imposed-appeal-unchecked` price; the publisher's rule is in penalty-schema/rule.yaml. (2) FREQUENCY: every violation type publishes `frequency` -- a lo<=mode<=hi loss-event-frequency band with a `basis` naming its kind, the date it was read, its denominator and what could not be looked at. A frequency with no basis is refused by the converter (ADR-0020); the floor is 0, so a loss-free year is possible. (3) BASIS ON EVERY WEIGHT: each control weight carries the same `basis` shape, and verify-penalty-feed.sh refuses a weight without one. NOTE ON THE FILE NAME: majors 1 and 2 validate against payload.schema.v2.json and major 3 against payload.schema.json. Major 3 is published and its envelope names that bare file, so repointing it would be an unreleased edit to the newest published major -- which .github/scripts/declared-bump-gate.py refuses by design (eco-system ticket 103). From major 4 on, every major's schema is payload.schema.vN.json and the bare name stays frozen at major 3.",
+  "type": "object",
+  "required": [
+    "note",
+    "regimes",
+    "control_weights"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "note": {
+      "type": "string",
+      "minLength": 1
+    },
+    "changelog": {
+      "type": "string",
+      "minLength": 1
+    },
+    "regimes": {
+      "type": "object",
+      "minProperties": 1,
+      "description": "Keyed by regime name, e.g. uk-gdpr. The name an adopter declares in its obligations.",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "authority",
+          "statute",
+          "currency",
+          "violation_types"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "authority": {
+            "type": "string",
+            "minLength": 1
+          },
+          "statute": {
+            "type": "string",
+            "minLength": 1
+          },
+          "currency": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$"
+          },
+          "violation_types": {
+            "type": "object",
+            "minProperties": 1,
+            "additionalProperties": {
+              "type": "object",
+              "required": [
+                "description",
+                "formula",
+                "frequency"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "description": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "formula": {
+                  "type": "object",
+                  "required": [
+                    "type"
+                  ],
+                  "description": "One of pct_of_global_turnover, per_month_escalating, per_violation_tier, pct_of_relevant_revenue_plus_discretion. Each carries its own rate, cap or band fields; the converter beside this feed reads them.",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                },
+                "real_examples_gbp": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "org",
+                      "source",
+                      "status",
+                      "final_as_of",
+                      "litigation"
+                    ],
+                    "description": "One published enforcement action. `fine_gbp`/`fine_usd` is the figure the regulator IMPOSED; `notice_gbp`/`notice_usd` carries the notice figure where a later decision moved it. `status` decides whether it prices.",
+                    "properties": {
+                      "org": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "year": {
+                        "type": "integer"
+                      },
+                      "fine_gbp": {
+                        "type": "number"
+                      },
+                      "fine_usd": {
+                        "type": "number"
+                      },
+                      "notice_gbp": {
+                        "type": "number"
+                      },
+                      "notice_usd": {
+                        "type": "number"
+                      },
+                      "proposed_gbp": {
+                        "type": "number"
+                      },
+                      "note": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "source": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Where the figure comes from: the regulator's own instrument, and where a later decision moved it, what moved it and where that is recorded. REQUIRED for every example (eco-system ticket 79 review F1): before it was, an example with a `status` and no source priced -- an invented GBP 5,000,000 with status `final` moved uk-gdpr/lower-tier's mode from GBP 92,000 to GBP 2,546,000 and the feed check said PASS."
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "final",
+                          "imposed-appeal-unchecked",
+                          "under-appeal",
+                          "set-aside",
+                          "not-collected",
+                          "notice-of-intent",
+                          "not-a-penalty",
+                          "unknown"
+                        ]
+                      },
+                      "final_as_of": {
+                        "description": "The date the figure became final, at the PRECISION the source supports: YYYY, YYYY-MM or YYYY-MM-DD. Null for every status but `final`. Year precision is not a rounder date, it is the honest one where no source in this estate's record carries a day (review F2).",
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "pattern": "^\\d{4}(-\\d{2}(-\\d{2})?)?$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "litigation": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  }
+                },
+                "real_examples_usd": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "org",
+                      "source",
+                      "status",
+                      "final_as_of",
+                      "litigation"
+                    ],
+                    "description": "One published enforcement action. `fine_gbp`/`fine_usd` is the figure the regulator IMPOSED; `notice_gbp`/`notice_usd` carries the notice figure where a later decision moved it. `status` decides whether it prices.",
+                    "properties": {
+                      "org": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "year": {
+                        "type": "integer"
+                      },
+                      "fine_gbp": {
+                        "type": "number"
+                      },
+                      "fine_usd": {
+                        "type": "number"
+                      },
+                      "notice_gbp": {
+                        "type": "number"
+                      },
+                      "notice_usd": {
+                        "type": "number"
+                      },
+                      "proposed_gbp": {
+                        "type": "number"
+                      },
+                      "note": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "source": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Where the figure comes from: the regulator's own instrument, and where a later decision moved it, what moved it and where that is recorded. REQUIRED for every example (eco-system ticket 79 review F1): before it was, an example with a `status` and no source priced -- an invented GBP 5,000,000 with status `final` moved uk-gdpr/lower-tier's mode from GBP 92,000 to GBP 2,546,000 and the feed check said PASS."
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "final",
+                          "imposed-appeal-unchecked",
+                          "under-appeal",
+                          "set-aside",
+                          "not-collected",
+                          "notice-of-intent",
+                          "not-a-penalty",
+                          "unknown"
+                        ]
+                      },
+                      "final_as_of": {
+                        "description": "The date the figure became final, at the PRECISION the source supports: YYYY, YYYY-MM or YYYY-MM-DD. Null for every status but `final`. Year precision is not a rounder date, it is the honest one where no source in this estate's record carries a day (review F2).",
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "pattern": "^\\d{4}(-\\d{2}(-\\d{2})?)?$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "litigation": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  }
+                },
+                "frequency": {
+                  "type": "object",
+                  "description": "The publisher's own loss-event-frequency band for this violation type: how often ONE organisation in scope draws an action of this kind, per year. The converter beside this feed reads it and refuses one with no basis.",
+                  "required": [
+                    "lef",
+                    "basis"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "lef": {
+                      "type": "array",
+                      "minItems": 3,
+                      "maxItems": 3,
+                      "items": {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      "description": "lo <= mode <= hi, events per year. A lo of 0 makes a loss-free year possible."
+                    },
+                    "basis": {
+                      "type": "object",
+                      "description": "What a published number rests on. `kind` says what sort of thing it is, `statement` says it in words, `as_of` is the date it was read, and where the number is not counted, `could_not_look` says what would make it counted. A number with no basis is a missing instrument (ADR-0020), never a cheaper one.",
+                      "required": [
+                        "kind",
+                        "statement",
+                        "as_of"
+                      ],
+                      "additionalProperties": false,
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "counted",
+                            "published",
+                            "editorial"
+                          ]
+                        },
+                        "statement": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "as_of": {
+                          "type": "string",
+                          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                        },
+                        "source": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "url": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "denominator": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "could_not_look": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "control_weights": {
+      "type": "object",
+      "minProperties": 1,
+      "description": "Keyed by regime name, then by violation type name. Both keys must name an entry that exists under regimes.",
+      "additionalProperties": {
+        "type": "object",
+        "minProperties": 1,
+        "additionalProperties": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Weights within one violation type sum to 1.0 (tolerance 1e-9), and each carries a `basis`.",
+          "items": {
+            "type": "object",
+            "required": [
+              "source",
+              "id",
+              "weight",
+              "basis"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "source": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The controls parent that defines the id, e.g. nist. Half of the (source, id) key."
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "description": "A bare catalogue control id as it appears on the wire, e.g. sc-28."
+              },
+              "weight": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 1
+              },
+              "basis": {
+                "type": "object",
+                "description": "What a published number rests on. `kind` says what sort of thing it is, `statement` says it in words, `as_of` is the date it was read, and where the number is not counted, `could_not_look` says what would make it counted. A number with no basis is a missing instrument (ADR-0020), never a cheaper one.",
+                "required": [
+                  "kind",
+                  "statement",
+                  "as_of"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "counted",
+                      "published",
+                      "editorial"
+                    ]
+                  },
+                  "statement": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "as_of": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  "source": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "url": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "denominator": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "could_not_look": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

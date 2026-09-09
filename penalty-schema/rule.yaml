@@ -4,6 +4,103 @@
 # only when the bump is not none; anything below lands on the observation
 # branch. Flat key: value so feeds/bump.py reads it with the standard library.
 feed: penalty-schema
-changed_when: "any formula rate or cap changes, any real_example added, any weight changes"
+changed_when: "any formula rate or cap changes, any real_example added, any example's status or final_as_of changes, any frequency or its basis changes, any weight or its basis changes"
 entries: regimes
 numeric_tolerance: 0
+
+# THE PUBLISHER'S RULE ON FINALITY (eco-system ticket 79 item 1, and ticket 75
+# Q4's instruction to add a litigation-status field). Delegated under ADR-0025;
+# the reason is the whole of it, so it is written here and not summarised.
+#
+#   A published fine is the FINAL COLLECTED FIGURE, not the notice figure.
+#
+# Why that reading and not "the notice figure, because that is what the
+# regulator announced": this schema's own examples are the argument. Doorstep
+# Dispensaree's notice was GBP 275,000 and the figure that stands is GBP 92,000 --
+# cut by the First-tier Tribunal in 2021 and confirmed when the Court of Appeal
+# dismissed the further appeal in 2024 -- so the notice overstated by 3x.
+# Clearview AI's GBP 7,552,800 has never been collected at all. The DSG Retail
+# penalty eco-system ticket 94 studied went GBP 500,000 -> GBP 250,000 at the
+# First-tier Tribunal -> set aside at the Upper Tribunal -> remitted, and has no
+# final figure six years on. Pricing from notice figures does not add noise
+# around the truth; it is biased one way, upward, every time.
+#
+# HOW A FIGURE IS GRADED. `status` is one of:
+#
+#   final                       the challenge is decided, and THIS REPOSITORY HAS
+#                               A SOURCED RECORD OF IT. `final_as_of` carries the
+#                               date at the precision that source supports --
+#                               YYYY, YYYY-MM or YYYY-MM-DD -- and `litigation`
+#                               says how it got there and what the basis was.
+#                               PRICES.
+#   imposed-appeal-unchecked    the regulator's own CONCLUDING INSTRUMENT (an ICO
+#                               monetary penalty notice, an FCA Final Notice, an
+#                               HHS OCR resolution agreement), no adverse
+#                               litigation about it known to this repository, and
+#                               NO tribunal or court register read FOR THAT
+#                               EXAMPLE. PRICES, and every scenario it prices into
+#                               says exactly that: a named could-not-look on the
+#                               appeal, never a claim of finality.
+#   under-appeal, set-aside,    DOES NOT PRICE. Each carries a `litigation` note
+#   not-collected,              saying what is known and what was not looked at.
+#   notice-of-intent,
+#   not-a-penalty, unknown
+#
+# The third value exists for ONE reason, and it is evidential: it is the only
+# grading that is TRUE of these figures. Marking every unverified figure `final`
+# claims a check nobody made -- the defect this ticket exists to fix. Marking
+# them all `unknown` claims the opposite check, "we looked and it is not final",
+# which nobody made either, and it throws away the one thing that IS known: which
+# instrument the regulator issued. `imposed-appeal-unchecked` says exactly that
+# and nothing more.
+#
+# WITHDRAWN 2026-09-09 (review N6). This paragraph used to add "…would have left
+# uk-gdpr higher-tier with no priceable example at all and refused a line the
+# estate prices today". That is an argument from the PRICING OUTCOME, which is
+# the reasoning the ONE RULE section below calls this ticket's own defect in
+# miniature -- and it sat directly above that section, contradicting it. It was
+# also false on its facts: composition prices only `uk-gdpr/lower-tier`
+# (platform compose/composition.py ICO_REGIME / ICO_VIOLATION_TYPE), so no line
+# the estate prices today would have been refused by grading higher-tier
+# `unknown`. This file's whole purpose is the reason, so the bad reason is
+# withdrawn here rather than left standing beside the good one.
+#
+# ONE RULE FOR EVERY REGULATOR (review F4). The first cut of this file graded ICO
+# monetary penalty notices `imposed-appeal-unchecked`, so they priced, and FCA
+# Final Notices `unknown`, so they did not -- while the two litigation notes
+# described the SAME posture: the regulator's concluding instrument, no register
+# read. The non-uniformity tracked the PRICING OUTCOME rather than the evidence,
+# which is this ticket's own defect in miniature. It is gone: an ICO monetary
+# penalty notice, an FCA Final Notice and an HHS OCR resolution agreement are all
+# concluding instruments and grade the same way, and `unknown` now applies to
+# nothing in this payload -- every example names the instrument it came from, so
+# "we do not know what this is" was never true of any of them.
+#
+# SOURCING IS NOT FINALITY (review F1). Grading finality and not sourcing grades
+# half the question. A figure with a status and no `source` priced exactly as
+# well as one with both: an invented GBP 5,000,000 marked `final` moved
+# uk-gdpr/lower-tier's priced mode from GBP 92,000 to GBP 2,546,000 and every
+# check said PASS. `source` is now REQUIRED on every example; a PRICED example
+# with no source refuses by name, in the converter and in verify-penalty-feed.sh;
+# and every scenario prints what each priced figure rests on.
+#
+# PRECISION IS PART OF THE CLAIM (review F2). `final_as_of` takes a year, a month
+# or a day, and the honest value is the precision the source supports. Doorstep
+# Dispensaree's reduction is recorded in this eco-system's own
+# REVIEW-2026-09-02.md, citing Hunton and DataGuidance, as: the FIRST-TIER
+# TRIBUNAL cut it to GBP 92,000 in 2021, and the COURT OF APPEAL dismissed the
+# further appeal in 2024. No source this estate holds carries a day, so
+# `final_as_of` is `2024`. A day-precise date would have been a claim about a
+# court record nobody here has read -- and the first cut of this payload made
+# exactly that claim, and attributed the reduction to the wrong court.
+#
+# A NOTICE BELOW ITS OWN FINAL FIGURE IS REFUSED (review F5), naming both
+# numbers: the rule above rests on notice figures being biased ONE WAY, upward,
+# and a notice below the figure that stands is either a transposition or a case
+# this rule does not describe.
+#
+# A payload in which NOTHING carries a status predates the field (majors 1 to 3).
+# It prices as it always did and the converter says so on the scenario. An
+# example with no status BESIDE one that has it is refused by name: a dataset
+# half-checked for finality is worse than one not checked at all, because the
+# checked half makes the rest look checked too.

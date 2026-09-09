@@ -3,21 +3,23 @@
 # one unambiguous value. A human reviews it in the PR before cut-release.yml
 # tags.
 #
-# CORRECTED 2026-08-29 (ticket 43): this said `none` while v3/feed.json sat in
-# the tree untagged, carrying a new payload_schema and a control_weights
-# section that v2 does not have. The next release IS v3.0.0 and it is a major.
-# `none` was not a statement about v3, it was a statement made before v3
-# existed and never revisited -- which is exactly the disagreement
-# .github/scripts/declared-bump-gate.py was built to refuse, and did refuse the
-# first time it ran (ticket 18 Answer 5). Set this back to `none` once v3.0.0
-# is tagged and nothing further is queued.
+# History of this file is in git; the two corrections it used to carry in prose
+# (2026-08-29 ticket 43, 2026-09-06 ticket 67) are both spent -- v3.0.0 is tagged
+# and `git diff v3.0.0 origin/main -- penalty-schema` was empty when it was last
+# reset to `none`.
 #
-# RESET 2026-09-06 (eco-system ticket 67 item (b)), which is what the line
-# above asked for. v3.0.0 is tagged on the real remote (`v3.0.0^{}` resolves to
-# 9d09222) and `git diff v3.0.0 origin/main -- penalty-schema` is empty, so
-# nothing is queued and the next release would publish no content change: none.
-# The gate's `--tree` mode was corrected in the same commit, because it had been
-# answering a different question -- the bump between the two newest PUBLISHED
-# majors, which is a fact about the LAST release and stays `major` forever -- so
-# following the instruction above would have turned the gate red.
-bump: none
+# SET TO `major` 2026-09-09 (eco-system ticket 79 items 1, 3 and 5).
+# penalty-schema/v4/ is now in the tree and untagged: the queued release is
+# v4.0.0 and it is a major, because the payload schema changed (ADR-0019).
+# What changed: every real example carries `status`, `final_as_of` and
+# `litigation`; every violation type publishes a `frequency` with a dated
+# `basis`; every control weight carries the same `basis`.
+#
+# THE CUT IS NOT DONE HERE. `.github/workflows/cut-release.yml` is dispatched by
+# the owner, and it is the owner who signs v4.0.0. This file declares the bump
+# the gate then computes against the tag; the gate
+# (.github/scripts/declared-bump-gate.py, eco-system ticket 103) reads the
+# predecessor AT v3.0.0, checks that v3 on disk is byte-for-byte what v3.0.0
+# published, and refuses any tag that is not bump(v3.0.0, major) = v4.0.0.
+# Set this back to `none` once v4.0.0 is tagged and nothing further is queued.
+bump: major
