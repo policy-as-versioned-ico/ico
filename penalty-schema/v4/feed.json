@@ -1,0 +1,557 @@
+{
+  "kind": "feed",
+  "name": "penalty-schema",
+  "version": "4.0.0",
+  "published_by": "ico",
+  "published_at": "2026-09-09T12:00:00+01:00",
+  "payload_schema": "penalty-schema/payload.schema.v4.json",
+  "payload": {
+    "note": "regime -> violation-type -> fine formula/cap, grounded in real public enforcement notices, each carrying its own finality status; a published frequency per violation type; and per-control weights, each carrying its basis. Feeds the platform FAIR engine's loss-magnitude and loss-event-frequency inputs directly.",
+    "changelog": "v4 (eco-system ticket 79 items 1, 3 and 5): (a) every real example carries `status`, `final_as_of` and a `litigation` note, and only a figure whose status is `final` or `imposed-appeal-unchecked` prices -- the publisher's rule is the FINAL COLLECTED FIGURE, not the notice figure (rule.yaml). Doorstep Dispensaree's GBP 275,000 notice becomes the GBP 92,000 the Court of Appeal confirmed on 2024-12-09, with the notice figure kept as `notice_gbp`; Clearview AI's GBP 7,552,800 was never collected and stops pricing; TikTok, Premera, Standard Chartered and TSB are `unknown` and stop pricing, each naming what was not looked at; Starling Bank's FCA final notice of 2024-09-27 is added as the one example whose finality a run of this estate established (eco-system ticket 94). (b) every violation type publishes `frequency` -- a lo<=mode<=hi loss-event-frequency band and a `basis` carrying a kind, a dated `as_of`, a `denominator` and a `could_not_look`. The floor is 0, so a loss-free year is possible; the flat (1, 2, 4) the converter used to default to made one impossible. (c) every control weight carries the same `basis` shape. A converter that meets a frequency or a weight with no basis refuses (ADR-0020). payload_schema change, so a major (ADR-0019).",
+    "regimes": {
+      "uk-gdpr": {
+        "authority": "ICO (Information Commissioner's Office)",
+        "statute": "UK GDPR / Data Protection Act 2018 s157",
+        "currency": "GBP",
+        "violation_types": {
+          "higher-tier": {
+            "description": "Arts 5, 6, 7, 9, 44-49 breaches -- unlawful processing, core principles, cross-border transfers",
+            "formula": {
+              "type": "pct_of_global_turnover",
+              "rate": 0.04,
+              "cap_gbp": 17500000
+            },
+            "real_examples_gbp": [
+              {
+                "org": "British Airways",
+                "year": 2020,
+                "fine_gbp": 20000000,
+                "proposed_gbp": 183390000,
+                "source": "ICO monetary penalty notice, 16 Oct 2020",
+                "status": "imposed-appeal-unchecked",
+                "final_as_of": null,
+                "litigation": "an ICO monetary penalty notice under DPA 2018 s155 is the penalty IMPOSED, not a notice of intent; the notice of intent that preceded it was reduced to this figure. No First-tier Tribunal or court register was read by this repository."
+              },
+              {
+                "org": "Marriott International",
+                "year": 2020,
+                "fine_gbp": 18400000,
+                "proposed_gbp": 99200000,
+                "source": "ICO monetary penalty notice, 30 Oct 2020",
+                "status": "imposed-appeal-unchecked",
+                "final_as_of": null,
+                "litigation": "an ICO monetary penalty notice under DPA 2018 s155 is the penalty IMPOSED, not a notice of intent; the notice of intent that preceded it was reduced to this figure. No First-tier Tribunal or court register was read by this repository."
+              },
+              {
+                "org": "TikTok Information Technologies UK",
+                "year": 2023,
+                "fine_gbp": 12700000,
+                "source": "ICO monetary penalty notice, 4 Apr 2023 -- children's data",
+                "status": "unknown",
+                "final_as_of": null,
+                "litigation": "the ICO imposed this figure on 2023-04-04. Whether it was appealed to the First-tier Tribunal has not been looked at by this repository, and no source in this estate's record states it. A named could-not-look: the figure does not price (eco-system ticket 79 item 1)."
+              }
+            ],
+            "frequency": {
+              "lef": [
+                0,
+                2,
+                4
+              ],
+              "basis": {
+                "kind": "editorial",
+                "as_of": "2026-09-09",
+                "denominator": "none published. A rate needs a numerator (enforcement actions of this violation type in a year) and a denominator (organisations in scope of that violation type). Neither regulator publishes the denominator.",
+                "could_not_look": "no run of this repository has counted a regulator's own published enforcement register, and no denominator is published, so this is an editorial band and NOT a counted base rate. What would close it: a fetch that counts actions per year from the regulator's register and a stated population in scope, both dated on this feed.",
+                "statement": "Editorial band for how often one organisation draws a higher-tier UK GDPR enforcement action. Floor 0: a loss-free year is possible, which the previous flat (1, 2, 4) made impossible."
+              }
+            }
+          },
+          "lower-tier": {
+            "description": "Arts 8, 11, 25-39, 42, 43 breaches -- procedural/organisational failures",
+            "formula": {
+              "type": "pct_of_global_turnover",
+              "rate": 0.02,
+              "cap_gbp": 8700000
+            },
+            "real_examples_gbp": [
+              {
+                "org": "Clearview AI Inc",
+                "year": 2022,
+                "fine_gbp": 7552800,
+                "source": "ICO monetary penalty notice, 23 May 2022",
+                "status": "not-collected",
+                "final_as_of": null,
+                "litigation": "the ICO imposed GBP 7,552,800 on 2022-05-23. It is under challenge and has never been collected (eco-system ticket 79, ticket 94), so it is the imposed figure and not a collected one: it does not price."
+              },
+              {
+                "org": "Doorstep Dispensaree Ltd",
+                "year": 2019,
+                "fine_gbp": 92000,
+                "source": "ICO monetary penalty notice, 12 Dec 2019 -- unsecured storage of patient records; reduced on appeal, Court of Appeal 2024-12-09",
+                "notice_gbp": 275000,
+                "status": "final",
+                "final_as_of": "2024-12-09",
+                "litigation": "the GBP 275,000 notice of 2019-12-12 was reduced on appeal to GBP 92,000, confirmed by the Court of Appeal on 2024-12-09 (eco-system ticket 79). `notice_gbp` carries the notice figure; `fine_gbp` is what was imposed and stands."
+              }
+            ],
+            "frequency": {
+              "lef": [
+                0,
+                2,
+                4
+              ],
+              "basis": {
+                "kind": "editorial",
+                "as_of": "2026-09-09",
+                "denominator": "none published. A rate needs a numerator (enforcement actions of this violation type in a year) and a denominator (organisations in scope of that violation type). Neither regulator publishes the denominator.",
+                "could_not_look": "no run of this repository has counted a regulator's own published enforcement register, and no denominator is published, so this is an editorial band and NOT a counted base rate. What would close it: a fetch that counts actions per year from the regulator's register and a stated population in scope, both dated on this feed.",
+                "statement": "Editorial band for how often one organisation draws a lower-tier UK GDPR enforcement action. Floor 0: a loss-free year is possible, which the previous flat (1, 2, 4) made impossible."
+              }
+            }
+          }
+        }
+      },
+      "pci-dss": {
+        "authority": "card-scheme acquiring bank (contractual, not statutory)",
+        "statute": "Visa/Mastercard operating regulations, non-compliance assessment schedule",
+        "currency": "GBP",
+        "violation_types": {
+          "non-compliance-escalating": {
+            "description": "escalating monthly non-compliance assessment while a merchant remains PCI DSS non-compliant after a confirmed breach",
+            "formula": {
+              "type": "per_month_escalating",
+              "tiers": [
+                {
+                  "months": "1-3",
+                  "gbp_per_month": [
+                    5000,
+                    10000
+                  ]
+                },
+                {
+                  "months": "4-6",
+                  "gbp_per_month": [
+                    25000,
+                    50000
+                  ]
+                },
+                {
+                  "months": "7+",
+                  "gbp_per_month": [
+                    50000,
+                    100000
+                  ]
+                }
+              ]
+            },
+            "real_examples_gbp": [
+              {
+                "org": "commonly-published acquirer non-compliance bands",
+                "note": "figures are the widely cited Visa/Mastercard non-compliance fine bands, not a single named enforcement case -- card-scheme fines are contractual and rarely disclosed by org name",
+                "source": "PCI SSC / acquiring-bank compliance bulletins",
+                "status": "not-a-penalty",
+                "final_as_of": null,
+                "litigation": "this entry carries no `fine_gbp`: it is the widely published acquirer non-compliance band, not a penalty imposed on a named organisation, so there is nothing here whose finality could be checked. The band itself is what the formula prices."
+              }
+            ],
+            "frequency": {
+              "lef": [
+                0,
+                2,
+                4
+              ],
+              "basis": {
+                "kind": "editorial",
+                "as_of": "2026-09-09",
+                "denominator": "none published. A rate needs a numerator (enforcement actions of this violation type in a year) and a denominator (organisations in scope of that violation type). Neither regulator publishes the denominator.",
+                "could_not_look": "no run of this repository has counted a regulator's own published enforcement register, and no denominator is published, so this is an editorial band and NOT a counted base rate. What would close it: a fetch that counts actions per year from the regulator's register and a stated population in scope, both dated on this feed.",
+                "statement": "Editorial band for how often a merchant lands in an escalating acquirer non-compliance assessment. Floor 0."
+              }
+            }
+          }
+        }
+      },
+      "hipaa": {
+        "authority": "US HHS Office for Civil Rights (OCR)",
+        "statute": "HITECH Act civil-penalty tiers, 45 CFR 160.404 (inflation-adjusted)",
+        "currency": "USD",
+        "violation_types": {
+          "willful-neglect-uncorrected": {
+            "description": "Tier 4 -- willful neglect, not corrected within 30 days",
+            "formula": {
+              "type": "per_violation_tier",
+              "min_usd": 68928,
+              "max_usd": 2067813,
+              "annual_cap_usd": 2067813
+            },
+            "real_examples_usd": [
+              {
+                "org": "Anthem Inc",
+                "year": 2018,
+                "fine_usd": 16000000,
+                "source": "HHS OCR resolution agreement, Oct 2018",
+                "status": "final",
+                "final_as_of": "2018-10-15",
+                "litigation": "HHS OCR resolution agreement, USD 16,000,000, final and collected, no appeal (eco-system ticket 94, which sourced it and recorded that hhs.gov could not be fetched from this environment and four independent secondary sources were used instead)."
+              },
+              {
+                "org": "Premera Blue Cross",
+                "year": 2020,
+                "fine_usd": 6850000,
+                "source": "HHS OCR resolution agreement, Nov 2020",
+                "status": "unknown",
+                "final_as_of": null,
+                "litigation": "an HHS OCR resolution agreement of USD 6,850,000 is recorded in this payload for 2020. No source in this estate's record states whether it was final and collected. A named could-not-look: the figure does not price."
+              }
+            ],
+            "frequency": {
+              "lef": [
+                0,
+                2,
+                4
+              ],
+              "basis": {
+                "kind": "editorial",
+                "as_of": "2026-09-09",
+                "denominator": "none published. A rate needs a numerator (enforcement actions of this violation type in a year) and a denominator (organisations in scope of that violation type). Neither regulator publishes the denominator.",
+                "could_not_look": "no run of this repository has counted a regulator's own published enforcement register, and no denominator is published, so this is an editorial band and NOT a counted base rate. What would close it: a fetch that counts actions per year from the regulator's register and a stated population in scope, both dated on this feed.",
+                "statement": "Editorial band for how often one covered entity draws a tier-4 OCR action. Floor 0."
+              }
+            }
+          }
+        }
+      },
+      "fca": {
+        "authority": "UK Financial Conduct Authority",
+        "statute": "FCA five-step penalty framework, DEPP 6.5",
+        "currency": "GBP",
+        "violation_types": {
+          "systems-and-controls-failure": {
+            "description": "AML / systems-and-controls breaches -- no fixed statutory cap, driven by relevant revenue and seriousness",
+            "formula": {
+              "type": "pct_of_relevant_revenue_plus_discretion",
+              "note": "step 2 disgorgement + step 3 seriousness (% of relevant revenue) + step 4/5 deterrence & adjustment/discount; no fixed cap"
+            },
+            "real_examples_gbp": [
+              {
+                "org": "Standard Chartered Bank",
+                "year": 2019,
+                "fine_gbp": 102163200,
+                "source": "FCA final notice, 9 Apr 2019 -- AML controls",
+                "status": "unknown",
+                "final_as_of": null,
+                "litigation": "FCA final notice, 9 Apr 2019. An FCA final notice is issued at the end of the FCA's own process, but whether it was referred to the Upper Tribunal has not been looked at by this repository and no source in this estate's record states it. A named could-not-look: the figure does not price."
+              },
+              {
+                "org": "TSB Bank",
+                "year": 2022,
+                "fine_gbp": 48650000,
+                "source": "FCA final notice, 20 Dec 2022 -- IT migration failures",
+                "status": "unknown",
+                "final_as_of": null,
+                "litigation": "FCA final notice, 20 Dec 2022. An FCA final notice is issued at the end of the FCA's own process, but whether it was referred to the Upper Tribunal has not been looked at by this repository and no source in this estate's record states it. A named could-not-look: the figure does not price."
+              },
+              {
+                "org": "Starling Bank Limited",
+                "year": 2024,
+                "fine_gbp": 28959426,
+                "source": "FCA final notice, 27 Sep 2024, ref 730166 -- financial-crime controls",
+                "status": "final",
+                "final_as_of": "2024-09-27",
+                "litigation": "final and collected, no appeal, sourced with its URL and date by eco-system ticket 94 (.scratch/ecosystem/research/94-studied-firms.md). The one example in this payload whose finality a run of this estate actually established."
+              }
+            ],
+            "frequency": {
+              "lef": [
+                0,
+                2,
+                4
+              ],
+              "basis": {
+                "kind": "editorial",
+                "as_of": "2026-09-09",
+                "denominator": "none published. A rate needs a numerator (enforcement actions of this violation type in a year) and a denominator (organisations in scope of that violation type). Neither regulator publishes the denominator.",
+                "could_not_look": "no run of this repository has counted a regulator's own published enforcement register, and no denominator is published, so this is an editorial band and NOT a counted base rate. What would close it: a fetch that counts actions per year from the regulator's register and a stated population in scope, both dated on this feed.",
+                "statement": "Editorial band for how often one authorised firm draws an FCA systems-and-controls final notice. Floor 0."
+              }
+            }
+          }
+        }
+      }
+    },
+    "control_weights": {
+      "uk-gdpr": {
+        "higher-tier": [
+          {
+            "source": "nist",
+            "id": "sc-28",
+            "weight": 0.3,
+            "basis": {
+              "kind": "editorial",
+              "as_of": "2026-09-09",
+              "statement": "nist sc-28 -- protection of information at rest: the control whose absence turns a breach into a disclosure of the records themselves. Weighted 0.3 of uk-gdpr/higher-tier against the other 4 control(s) named here.",
+              "could_not_look": "no regulator publishes an apportionment of a penalty across NIST SP 800-53 controls, and no run of this estate has derived one from decided cases. These shares are the publisher's editorial partition and are labelled as such. What would close it: a published or derived mapping from enforcement findings to control ids, dated on this feed."
+            }
+          },
+          {
+            "source": "nist",
+            "id": "ac-3",
+            "weight": 0.25,
+            "basis": {
+              "kind": "editorial",
+              "as_of": "2026-09-09",
+              "statement": "nist ac-3 -- access enforcement: the control that decides whether a request reaches the records at all. Weighted 0.25 of uk-gdpr/higher-tier against the other 4 control(s) named here.",
+              "could_not_look": "no regulator publishes an apportionment of a penalty across NIST SP 800-53 controls, and no run of this estate has derived one from decided cases. These shares are the publisher's editorial partition and are labelled as such. What would close it: a published or derived mapping from enforcement findings to control ids, dated on this feed."
+            }
+          },
+          {
+            "source": "nist",
+            "id": "ac-6",
+            "weight": 0.2,
+            "basis": {
+              "kind": "editorial",
+              "as_of": "2026-09-09",
+              "statement": "nist ac-6 -- least privilege: the control that bounds how much one compromised identity reaches. Weighted 0.2 of uk-gdpr/higher-tier against the other 4 control(s) named here.",
+              "could_not_look": "no regulator publishes an apportionment of a penalty across NIST SP 800-53 controls, and no run of this estate has derived one from decided cases. These shares are the publisher's editorial partition and are labelled as such. What would close it: a published or derived mapping from enforcement findings to control ids, dated on this feed."
+            }
+          },
+          {
+            "source": "nist",
+            "id": "au-2",
+            "weight": 0.15,
+            "basis": {
+              "kind": "editorial",
+              "as_of": "2026-09-09",
+              "statement": "nist au-2 -- event logging: the control that decides whether the breach is detectable at all. Weighted 0.15 of uk-gdpr/higher-tier against the other 4 control(s) named here.",
+              "could_not_look": "no regulator publishes an apportionment of a penalty across NIST SP 800-53 controls, and no run of this estate has derived one from decided cases. These shares are the publisher's editorial partition and are labelled as such. What would close it: a published or derived mapping from enforcement findings to control ids, dated on this feed."
+            }
+          },
+          {
+            "source": "nist",
+            "id": "ir-4",
+            "weight": 0.1,
+            "basis": {
+              "kind": "editorial",
+              "as_of": "2026-09-09",
+              "statement": "nist ir-4 -- incident handling: the control that bounds how long the exposure runs. Weighted 0.1 of uk-gdpr/higher-tier against the other 4 control(s) named here.",
+              "could_not_look": "no regulator publishes an apportionment of a penalty across NIST SP 800-53 controls, and no run of this estate has derived one from decided cases. These shares are the publisher's editorial partition and are labelled as such. What would close it: a published or derived mapping from enforcement findings to control ids, dated on this feed."
+            }
+          }
+        ],
+        "lower-tier": [
+          {
+            "source": "nist",
+            "id": "pl-2",
+            "weight": 0.3,
+            "basis": {
+              "kind": "editorial",
+              "as_of": "2026-09-09",
+              "statement": "nist pl-2 -- system security plan: the governance-of-record control the regulator asks for first. Weighted 0.3 of uk-gdpr/lower-tier against the other 3 control(s) named here.",
+              "could_not_look": "no regulator publishes an apportionment of a penalty across NIST SP 800-53 controls, and no run of this estate has derived one from decided cases. These shares are the publisher's editorial partition and are labelled as such. What would close it: a published or derived mapping from enforcement findings to control ids, dated on this feed."
+            }
+          },
+          {
+            "source": "nist",
+            "id": "ra-3",
+            "weight": 0.3,
+            "basis": {
+              "kind": "editorial",
+              "as_of": "2026-09-09",
+              "statement": "nist ra-3 -- risk assessment: the governance-of-record control a lower-tier finding turns on. Weighted 0.3 of uk-gdpr/lower-tier against the other 3 control(s) named here.",
+              "could_not_look": "no regulator publishes an apportionment of a penalty across NIST SP 800-53 controls, and no run of this estate has derived one from decided cases. These shares are the publisher's editorial partition and are labelled as such. What would close it: a published or derived mapping from enforcement findings to control ids, dated on this feed."
+            }
+          },
+          {
+            "source": "nist",
+            "id": "ca-2",
+            "weight": 0.2,
+            "basis": {
+              "kind": "editorial",
+              "as_of": "2026-09-09",
+              "statement": "nist ca-2 -- control assessment: whether the programme was ever tested. Weighted 0.2 of uk-gdpr/lower-tier against the other 3 control(s) named here.",
+              "could_not_look": "no regulator publishes an apportionment of a penalty across NIST SP 800-53 controls, and no run of this estate has derived one from decided cases. These shares are the publisher's editorial partition and are labelled as such. What would close it: a published or derived mapping from enforcement findings to control ids, dated on this feed."
+            }
+          },
+          {
+            "source": "nist",
+            "id": "ir-8",
+            "weight": 0.2,
+            "basis": {
+              "kind": "editorial",
+              "as_of": "2026-09-09",
+              "statement": "nist ir-8 -- incident response plan: whether a response existed before the incident. Weighted 0.2 of uk-gdpr/lower-tier against the other 3 control(s) named here.",
+              "could_not_look": "no regulator publishes an apportionment of a penalty across NIST SP 800-53 controls, and no run of this estate has derived one from decided cases. These shares are the publisher's editorial partition and are labelled as such. What would close it: a published or derived mapping from enforcement findings to control ids, dated on this feed."
+            }
+          }
+        ]
+      },
+      "pci-dss": {
+        "non-compliance-escalating": [
+          {
+            "source": "nist",
+            "id": "sc-7",
+            "weight": 0.25,
+            "basis": {
+              "kind": "editorial",
+              "as_of": "2026-09-09",
+              "statement": "nist sc-7 -- boundary protection: the cardholder-data-environment segmentation PCI DSS is built on. Weighted 0.25 of pci-dss/non-compliance-escalating against the other 4 control(s) named here.",
+              "could_not_look": "no regulator publishes an apportionment of a penalty across NIST SP 800-53 controls, and no run of this estate has derived one from decided cases. These shares are the publisher's editorial partition and are labelled as such. What would close it: a published or derived mapping from enforcement findings to control ids, dated on this feed."
+            }
+          },
+          {
+            "source": "nist",
+            "id": "sc-8",
+            "weight": 0.25,
+            "basis": {
+              "kind": "editorial",
+              "as_of": "2026-09-09",
+              "statement": "nist sc-8 -- transmission confidentiality: cardholder data in flight. Weighted 0.25 of pci-dss/non-compliance-escalating against the other 4 control(s) named here.",
+              "could_not_look": "no regulator publishes an apportionment of a penalty across NIST SP 800-53 controls, and no run of this estate has derived one from decided cases. These shares are the publisher's editorial partition and are labelled as such. What would close it: a published or derived mapping from enforcement findings to control ids, dated on this feed."
+            }
+          },
+          {
+            "source": "nist",
+            "id": "ia-2",
+            "weight": 0.2,
+            "basis": {
+              "kind": "editorial",
+              "as_of": "2026-09-09",
+              "statement": "nist ia-2 -- identification and authentication: who reached the cardholder data environment. Weighted 0.2 of pci-dss/non-compliance-escalating against the other 4 control(s) named here.",
+              "could_not_look": "no regulator publishes an apportionment of a penalty across NIST SP 800-53 controls, and no run of this estate has derived one from decided cases. These shares are the publisher's editorial partition and are labelled as such. What would close it: a published or derived mapping from enforcement findings to control ids, dated on this feed."
+            }
+          },
+          {
+            "source": "nist",
+            "id": "cm-6",
+            "weight": 0.2,
+            "basis": {
+              "kind": "editorial",
+              "as_of": "2026-09-09",
+              "statement": "nist cm-6 -- configuration settings: the drift PCI assessments most often find. Weighted 0.2 of pci-dss/non-compliance-escalating against the other 4 control(s) named here.",
+              "could_not_look": "no regulator publishes an apportionment of a penalty across NIST SP 800-53 controls, and no run of this estate has derived one from decided cases. These shares are the publisher's editorial partition and are labelled as such. What would close it: a published or derived mapping from enforcement findings to control ids, dated on this feed."
+            }
+          },
+          {
+            "source": "nist",
+            "id": "au-6",
+            "weight": 0.1,
+            "basis": {
+              "kind": "editorial",
+              "as_of": "2026-09-09",
+              "statement": "nist au-6 -- audit review: whether the logs were ever read. Weighted 0.1 of pci-dss/non-compliance-escalating against the other 4 control(s) named here.",
+              "could_not_look": "no regulator publishes an apportionment of a penalty across NIST SP 800-53 controls, and no run of this estate has derived one from decided cases. These shares are the publisher's editorial partition and are labelled as such. What would close it: a published or derived mapping from enforcement findings to control ids, dated on this feed."
+            }
+          }
+        ]
+      },
+      "hipaa": {
+        "willful-neglect-uncorrected": [
+          {
+            "source": "nist",
+            "id": "ac-3",
+            "weight": 0.25,
+            "basis": {
+              "kind": "editorial",
+              "as_of": "2026-09-09",
+              "statement": "nist ac-3 -- access enforcement: the control that decides whether a request reaches the records at all. Weighted 0.25 of hipaa/willful-neglect-uncorrected against the other 4 control(s) named here.",
+              "could_not_look": "no regulator publishes an apportionment of a penalty across NIST SP 800-53 controls, and no run of this estate has derived one from decided cases. These shares are the publisher's editorial partition and are labelled as such. What would close it: a published or derived mapping from enforcement findings to control ids, dated on this feed."
+            }
+          },
+          {
+            "source": "nist",
+            "id": "sc-28",
+            "weight": 0.25,
+            "basis": {
+              "kind": "editorial",
+              "as_of": "2026-09-09",
+              "statement": "nist sc-28 -- protection of information at rest: the control whose absence turns a breach into a disclosure of the records themselves. Weighted 0.25 of hipaa/willful-neglect-uncorrected against the other 4 control(s) named here.",
+              "could_not_look": "no regulator publishes an apportionment of a penalty across NIST SP 800-53 controls, and no run of this estate has derived one from decided cases. These shares are the publisher's editorial partition and are labelled as such. What would close it: a published or derived mapping from enforcement findings to control ids, dated on this feed."
+            }
+          },
+          {
+            "source": "nist",
+            "id": "au-2",
+            "weight": 0.2,
+            "basis": {
+              "kind": "editorial",
+              "as_of": "2026-09-09",
+              "statement": "nist au-2 -- event logging: the control that decides whether the breach is detectable at all. Weighted 0.2 of hipaa/willful-neglect-uncorrected against the other 4 control(s) named here.",
+              "could_not_look": "no regulator publishes an apportionment of a penalty across NIST SP 800-53 controls, and no run of this estate has derived one from decided cases. These shares are the publisher's editorial partition and are labelled as such. What would close it: a published or derived mapping from enforcement findings to control ids, dated on this feed."
+            }
+          },
+          {
+            "source": "nist",
+            "id": "cp-9",
+            "weight": 0.15,
+            "basis": {
+              "kind": "editorial",
+              "as_of": "2026-09-09",
+              "statement": "nist cp-9 -- system backup: availability of the health record after the event. Weighted 0.15 of hipaa/willful-neglect-uncorrected against the other 4 control(s) named here.",
+              "could_not_look": "no regulator publishes an apportionment of a penalty across NIST SP 800-53 controls, and no run of this estate has derived one from decided cases. These shares are the publisher's editorial partition and are labelled as such. What would close it: a published or derived mapping from enforcement findings to control ids, dated on this feed."
+            }
+          },
+          {
+            "source": "nist",
+            "id": "ir-4",
+            "weight": 0.15,
+            "basis": {
+              "kind": "editorial",
+              "as_of": "2026-09-09",
+              "statement": "nist ir-4 -- incident handling: the control that bounds how long the exposure runs. Weighted 0.15 of hipaa/willful-neglect-uncorrected against the other 4 control(s) named here.",
+              "could_not_look": "no regulator publishes an apportionment of a penalty across NIST SP 800-53 controls, and no run of this estate has derived one from decided cases. These shares are the publisher's editorial partition and are labelled as such. What would close it: a published or derived mapping from enforcement findings to control ids, dated on this feed."
+            }
+          }
+        ]
+      },
+      "fca": {
+        "systems-and-controls-failure": [
+          {
+            "source": "nist",
+            "id": "si-4",
+            "weight": 0.3,
+            "basis": {
+              "kind": "editorial",
+              "as_of": "2026-09-09",
+              "statement": "nist si-4 -- system monitoring: the FCA systems-and-controls finding is usually a detection finding. Weighted 0.3 of fca/systems-and-controls-failure against the other 3 control(s) named here.",
+              "could_not_look": "no regulator publishes an apportionment of a penalty across NIST SP 800-53 controls, and no run of this estate has derived one from decided cases. These shares are the publisher's editorial partition and are labelled as such. What would close it: a published or derived mapping from enforcement findings to control ids, dated on this feed."
+            }
+          },
+          {
+            "source": "nist",
+            "id": "ca-7",
+            "weight": 0.25,
+            "basis": {
+              "kind": "editorial",
+              "as_of": "2026-09-09",
+              "statement": "nist ca-7 -- continuous monitoring: whether the firm knew its own control state. Weighted 0.25 of fca/systems-and-controls-failure against the other 3 control(s) named here.",
+              "could_not_look": "no regulator publishes an apportionment of a penalty across NIST SP 800-53 controls, and no run of this estate has derived one from decided cases. These shares are the publisher's editorial partition and are labelled as such. What would close it: a published or derived mapping from enforcement findings to control ids, dated on this feed."
+            }
+          },
+          {
+            "source": "nist",
+            "id": "cm-3",
+            "weight": 0.25,
+            "basis": {
+              "kind": "editorial",
+              "as_of": "2026-09-09",
+              "statement": "nist cm-3 -- configuration change control: the change that caused the outage or the gap. Weighted 0.25 of fca/systems-and-controls-failure against the other 3 control(s) named here.",
+              "could_not_look": "no regulator publishes an apportionment of a penalty across NIST SP 800-53 controls, and no run of this estate has derived one from decided cases. These shares are the publisher's editorial partition and are labelled as such. What would close it: a published or derived mapping from enforcement findings to control ids, dated on this feed."
+            }
+          },
+          {
+            "source": "nist",
+            "id": "au-6",
+            "weight": 0.2,
+            "basis": {
+              "kind": "editorial",
+              "as_of": "2026-09-09",
+              "statement": "nist au-6 -- audit review: whether the logs were ever read. Weighted 0.2 of fca/systems-and-controls-failure against the other 3 control(s) named here.",
+              "could_not_look": "no regulator publishes an apportionment of a penalty across NIST SP 800-53 controls, and no run of this estate has derived one from decided cases. These shares are the publisher's editorial partition and are labelled as such. What would close it: a published or derived mapping from enforcement findings to control ids, dated on this feed."
+            }
+          }
+        ]
+      }
+    }
+  }
+}

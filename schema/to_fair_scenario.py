@@ -16,10 +16,26 @@ Loss-magnitude (lm) triple per formula type:
   - per_month_escalating (PCI): steady-state (7+ months) monthly band annualised
       by the ponytail LEF below, mode = midpoint of that band.
 
-Loss-event-frequency (lef) is NOT in the schema -- the schema prices "when it
-lands", not "how often". ponytail: a flat editorial per-regime warn-LEF, tune per
-institution if a scenario needs it; deny collapses LEF the same way every other
-scenario in this estate does (deny.lef ~ (0,0,1)).
+Loss-event-frequency (lef). From payload major 4 (eco-system ticket 79 item 3)
+the PUBLISHER ships it: each violation type carries `frequency.lef` and a
+`frequency.basis` naming what the number rests on and the date it was read.
+A `frequency` with no `basis` is REFUSED (ADR-0020: an unsourced number is a
+missing instrument, not a cheap one). A payload version published before the
+field existed (majors 1 to 3) still prices at this module's editorial default,
+and the scenario's own `note` then says so, names the number and names where its
+basis must go -- a NAMED could-not-look, never a bare number. deny collapses LEF
+the same way every other scenario in this estate does (deny.lef ~ (0,0,1)).
+
+Finality (eco-system ticket 79 item 1). From payload major 4 every real example
+carries `status`, `final_as_of` and `litigation`. Only a penalty whose status is
+`final` enters the loss magnitude: the publisher's rule, recorded in
+penalty-schema/rule.yaml, is THE FINAL COLLECTED FIGURE, NOT THE NOTICE FIGURE.
+Two of this schema's own examples say why -- Doorstep Dispensaree's GBP 275,000
+notice became GBP 92,000 at the Court of Appeal on 2024-12-09, and Clearview
+AI's GBP 7,552,800 has never been collected. An example carrying no `status`
+beside one that does is refused by name. A payload in which NOTHING carries a
+status predates the field: it prices as it always did and the scenario says
+plainly that no example in it could be checked for finality.
 
 One breach can draw more than one regime's consequence (an ICO fine *and* a PCI
 penalty on the same incident, say) -- pass `--also REGIME:VIOLATION_TYPE`
@@ -35,24 +51,142 @@ import json
 import statistics
 import sys
 
-DEFAULT_WARN_LEF = (1, 2, 4)   # plausible regulatory-incident frequency, events/yr
+# The editorial fallback for a payload published before major 4 carried a
+# frequency. It is NOT a basis and it never travels alone: every scenario that
+# annualises on it says so, names the number and names where the basis belongs
+# (eco-system ticket 79 item 3).
+DEFAULT_WARN_LEF = (1, 2, 4)
+UNSOURCED_LEF_NOTE = (
+    "FREQUENCY UNSOURCED: this line annualises at {lef} events/yr, which is this "
+    "converter's editorial default and not a counted rate. Payload version {version} "
+    "predates the publisher's `frequency` field, so no basis and no denominator could be "
+    "read for it; from major 4 the basis belongs on "
+    "regimes.{regime}.violation_types.{vt}.frequency.basis. A named could-not-look "
+    "(eco-system ticket 79 item 3), never a bare number.")
 DEFAULT_DENY_LEF = (0, 0, 1)   # admission blocks the loss path (matches driftwood-cart-pii.json)
 
+# Which `status` values are a penalty that was actually imposed and collected.
+# Everything else is a notice figure, a figure under challenge, or a figure that
+# was set aside -- none of them a published fine (penalty-schema/rule.yaml).
+# `final`                       the figure was imposed and the challenge window is
+#                               closed or the challenge is decided; `final_as_of`
+#                               says on what date, and `litigation` says how.
+# `imposed-appeal-unchecked`    the regulator IMPOSED this figure (a penalty
+#                               notice, not a notice of intent), no adverse
+#                               litigation is known to this repository, and NO
+#                               tribunal or court register was read. It prices,
+#                               and every scenario it prices into says exactly
+#                               that -- a named could-not-look on the APPEAL, not
+#                               a claim of finality (eco-system ticket 79 item 1).
+# Everything else -- `under-appeal`, `set-aside`, `not-collected`,
+# `notice-of-intent`, `not-a-penalty`, `unknown` -- never prices.
+PRICING_STATUS = ("final", "imposed-appeal-unchecked")
+UNCHECKED_STATUS = "imposed-appeal-unchecked"
+NO_STATUS_NOTE = (
+    "FINALITY UNCHECKED: no example in payload version {version} carries a `status`, so "
+    "whether any of the {n} figure(s) below is the FINAL collected penalty or a notice "
+    "figure since reduced, set aside or never collected could not be looked at. From "
+    "major 4 every example carries `status`, `final_as_of` and `litigation` "
+    "(eco-system ticket 79 item 1). A named could-not-look.")
 
-def _examples(vt: dict, currency_key: str) -> list[float]:
-    key = f"real_examples_{currency_key.lower()}"
-    return [e[f"fine_{currency_key.lower()}"] for e in vt.get(key, []) if f"fine_{currency_key.lower()}" in e]
+
+def _example_entries(vt: dict, currency_key: str) -> list[dict]:
+    return list(vt.get(f"real_examples_{currency_key.lower()}", []))
 
 
-def lm_triple(regime: dict, vt: dict, turnover: float | None = None) -> tuple[float, float, float]:
+def _final_examples(vt: dict, currency_key: str, where: str) -> tuple[list[float], str]:
+    """The fines this converter may price from, and the sentence that says which
+    of the published examples it left out and why.
+
+    Three shapes, all derived from the bytes in front of it and never from a
+    version string:
+
+    * NO example carries `status` -- the payload predates the field. Every
+      example prices, as it always did, and the caller carries NO_STATUS_NOTE.
+    * SOME carry it and some do not -- refuses, naming the example that does
+      not. A dataset half-checked for finality is worse than one not checked
+      at all, because the half that was checked makes the other half look
+      checked too.
+    * ALL carry it -- only `final` figures price, and the rest are named.
+    """
+    fine_key = f"fine_{currency_key.lower()}"
+    entries = _example_entries(vt, currency_key)
+    priced = [e[fine_key] for e in entries if fine_key in e]
+    with_status = [e for e in entries if "status" in e]
+    if not with_status:
+        return priced, NO_STATUS_NOTE.format(version="{version}", n=len(priced))
+    missing = [e for e in entries if "status" not in e]
+    if missing:
+        named = ", ".join(str(e.get("org", "an unnamed example")) for e in missing)
+        sys.exit(f"{where}: {named} carries no `status`, and other examples here do -- a "
+                 f"penalty with no status prices as if it were final. Give it `status`, "
+                 f"`final_as_of` and `litigation`, or remove it (eco-system ticket 79 item 1)")
+    final, dropped, unchecked = [], [], []
+    for e in entries:
+        if fine_key not in e:
+            continue
+        who = str(e.get("org", "an unnamed example"))
+        if e.get("status") in PRICING_STATUS:
+            final.append(e[fine_key])
+            if e.get("status") == UNCHECKED_STATUS:
+                unchecked.append(f"{who} ({e[fine_key]:,.0f} {currency_key})")
+        else:
+            dropped.append(f"{who} ({e[fine_key]:,.0f} {currency_key}, status "
+                            f"{e.get('status')!r}: "
+                            f"{e.get('litigation') or 'no litigation note'})")
+    parts = []
+    if dropped:
+        parts.append("Not priced, because the publisher's rule is the FINAL COLLECTED FIGURE "
+                     "and not the notice figure (penalty-schema/rule.yaml): "
+                     + "; ".join(dropped) + ".")
+    if unchecked:
+        parts.append("APPEAL UNCHECKED: " + "; ".join(unchecked) + " price(s) here as a figure "
+                     "the regulator imposed, with no tribunal or court register read by this "
+                     "repository and no adverse litigation known to it. A named could-not-look "
+                     "(eco-system ticket 79 item 1), never a claim that the figure is final.")
+    return final, " ".join(parts)
+
+
+def _frequency(vt: dict, where: str) -> tuple[tuple | None, str]:
+    """The publisher's own published frequency and the sentence that carries its
+    basis. `(None, "")` where the payload publishes none -- the caller then
+    falls back to DEFAULT_WARN_LEF and says so. A frequency with no basis
+    REFUSES: a number the publisher signs and cannot say the source of is a
+    missing instrument, not a cheaper one (ADR-0020)."""
+    freq = vt.get("frequency")
+    if not freq:
+        return None, ""
+    basis = freq.get("basis")
+    if not isinstance(basis, dict) or not basis.get("statement") or not basis.get("as_of"):
+        sys.exit(f"{where}: publishes a frequency {freq.get('lef')!r} with no `basis` carrying "
+                 f"a `statement` and an `as_of` date. A frequency the publisher signs and "
+                 f"cannot say the source of is a missing instrument (ADR-0020); its basis "
+                 f"belongs on {where}.frequency.basis (eco-system ticket 79 item 3)")
+    lef = freq.get("lef")
+    if not (isinstance(lef, (list, tuple)) and len(lef) == 3
+            and lef[0] <= lef[1] <= lef[2]):
+        sys.exit(f"{where}: frequency.lef is {lef!r}, not a lo<=mode<=hi triple")
+    denominator = basis.get("denominator")
+    could = basis.get("could_not_look")
+    note = (f"Frequency {tuple(lef)} events/yr, basis ({basis.get('kind', 'unlabelled')}, read "
+            f"{basis['as_of']}): {basis['statement']}"
+            + (f" Denominator: {denominator}." if denominator else "")
+            + (f" COULD NOT LOOK: {could}" if could else ""))
+    return tuple(lef), note
+
+
+def lm_triple(regime: dict, vt: dict, turnover: float | None = None,
+              where: str = "this violation type") -> tuple[float, float, float]:
     currency = regime["currency"]
     f = vt["formula"]
-    ex = _examples(vt, currency)
+    ex, _ = _final_examples(vt, currency, where)
     t = f["type"]
 
     if t in ("pct_of_global_turnover", "pct_of_relevant_revenue_plus_discretion"):
         if not ex:
-            sys.exit(f"no real_examples for formula type {t}; cannot derive a grounded lm")
+            sys.exit(f"{where}: no FINAL real example for formula type {t}; every published "
+                     f"figure here is a notice figure, under challenge, set aside or never "
+                     f"collected, so there is nothing grounded to price from (ADR-0020)")
         lo = min(ex)
         mode = statistics.median(ex)
         # the statutory cap is a floor on the ceiling, not a hard override: a real
@@ -69,6 +203,21 @@ def lm_triple(regime: dict, vt: dict, turnover: float | None = None) -> tuple[fl
         if turnover is not None and cap and rate:
             scale = (float(rate) * float(turnover)) / cap
             lo, mode, hi = lo * scale, mode * scale, hi * scale
+            # THE CAP RULE (eco-system ticket 79 items 5 and 7, delegated).
+            # UK GDPR Art 83(4)/(5) and DPA 2018 s157 set the maximum at the
+            # GREATER of the fixed sum and the percentage of turnover -- not the
+            # lesser. So `statutory_max = max(cap, rate x turnover)` is the
+            # ceiling, and the ratio scaling above only shapes the evidence
+            # INSIDE it. Without this clamp the scale factor rate*turnover/cap
+            # runs past 1 for any firm bigger than cap/rate and the ceiling
+            # `1.2 x largest example` scales with it: at a turnover of
+            # GBP 5,000,000,000 the old rule topped out at GBP 104,176,551.72
+            # against a statutory maximum of GBP 100,000,000.00, i.e. it priced
+            # a fine the statute does not permit.
+            statutory_max = max(cap, float(rate) * float(turnover))
+            hi = min(hi, statutory_max)
+            mode = min(mode, hi)
+            lo = min(lo, mode)
         return (float(lo), float(mode), float(hi))
 
     if t == "per_violation_tier":
@@ -95,31 +244,55 @@ def build_scenario(schema: dict, regime_name: str, vt_name: str, also=(),
     case additively and correlated (shared lef), never as independent risks.
     Which regimes actually apply to which workload is not decided here -- that
     scoping is a separate, still-open gap (ticket 17)."""
+    version = schema["schema_version"]
     sources = [(regime_name, vt_name), *also]
-    lms, names, regimes_used = [], [], []
+    lms, names, regimes_used, finality, freqs = [], [], [], [], []
     for r_name, v_name in sources:
         regime = schema["regimes"][r_name]
         vt = regime["violation_types"][v_name]
-        lms.append(lm_triple(regime, vt, turnover))
+        where = f"regimes.{r_name}.violation_types.{v_name}"
+        lms.append(lm_triple(regime, vt, turnover, where=where))
+        _, fin = _final_examples(vt, regime["currency"], where)
+        finality.append(fin.replace("{version}", str(version)))
+        freqs.append(_frequency(vt, where))
         names.append(f"{r_name}/{v_name}")
         regimes_used.append(regime)
     lm = lms[0] if len(lms) == 1 else [list(t) for t in lms]
+
+    # THE FREQUENCY, and where it came from (eco-system ticket 79 item 3). The
+    # publisher's own, when the payload publishes one -- the first source's,
+    # because one breach drawing several regimes' consequences happens at ONE
+    # rate (fair.py prices `also` sources additively on a shared lef). Where it
+    # publishes none, the caller's default, and the note says so by name.
+    published_lef, freq_note = freqs[0]
+    if published_lef is not None and warn_lef == DEFAULT_WARN_LEF:
+        warn_lef = published_lef
+    elif published_lef is None:
+        freq_note = UNSOURCED_LEF_NOTE.format(
+            lef=tuple(warn_lef), version=version, regime=regime_name, vt=vt_name)
+    if len(freqs) > 1:
+        others = [f"{n}: {t or 'publishes no frequency'}"
+                  for n, (_, t) in zip(names[1:], freqs[1:])]
+        freq_note += (" The further obligation source(s) draw on this one frequency, not their "
+                      "own (fair.py, shared lef); what each publishes is recorded here and not "
+                      "used: " + " | ".join(others))
+
     if len(lms) == 1:
         r = regimes_used[0]
         note = (f"lm sourced from {r['authority']} real public fines ({r['statute']}). "
-                f"warn/deny lef are editorial (schema doesn't carry frequency)."
-                + (f" Scaled to a subscriber turnover of {turnover:,.2f} {r['currency']}."
+                + (f"Scaled to a subscriber turnover of {turnover:,.2f} {r['currency']}, "
+                   f"clamped at the statutory maximum max(cap, rate x turnover)."
                    if turnover is not None else
-                   " Not sized to any subscriber: priced at the statutory cap."))
+                   "Not sized to any subscriber: priced at the statutory cap."))
     else:
         cites = "; ".join(f"{r['authority']} ({r['statute']})" for r in regimes_used)
         note = (f"lm sourced from real public fines, cited per source: {cites}. "
-                f"warn/deny lef are editorial (schema doesn't carry frequency). "
                 f"{len(lms)} obligation sources on one breach ({', '.join(names)}), priced "
                 f"additively and correlated (shared lef) -- see fair.py.")
+    note = " ".join(x for x in ([note] + [f for f in finality if f] + [freq_note]) if x)
     return {
-        "version": schema["schema_version"],
-        "name": f"ico:{schema['schema_version']} " + " + ".join(names),
+        "version": version,
+        "name": f"ico:{version} " + " + ".join(names),
         "note": note,
         "warn": {"lef": list(warn_lef), "lm": lm},
         "deny": {"lef": list(deny_lef), "lm": lm},
@@ -138,7 +311,9 @@ def selfcheck():
             schema = json.load(fh)
         for regime_name, regime in schema["regimes"].items():
             for vt_name in regime["violation_types"]:
-                lo, mode, hi = lm_triple(regime, regime["violation_types"][vt_name])
+                lo, mode, hi = lm_triple(
+                    regime, regime["violation_types"][vt_name],
+                    where=f"{path}: regimes.{regime_name}.violation_types.{vt_name}")
                 assert lo <= mode <= hi, (path, regime_name, vt_name, lo, mode, hi)
                 checked += 1
     assert checked >= 8, f"expected to check every regime x violation-type, only checked {checked}"

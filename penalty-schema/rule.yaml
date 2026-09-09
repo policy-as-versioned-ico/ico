@@ -4,6 +4,53 @@
 # only when the bump is not none; anything below lands on the observation
 # branch. Flat key: value so feeds/bump.py reads it with the standard library.
 feed: penalty-schema
-changed_when: "any formula rate or cap changes, any real_example added, any weight changes"
+changed_when: "any formula rate or cap changes, any real_example added, any example's status or final_as_of changes, any frequency or its basis changes, any weight or its basis changes"
 entries: regimes
 numeric_tolerance: 0
+
+# THE PUBLISHER'S RULE ON FINALITY (eco-system ticket 79 item 1, and ticket 75
+# Q4's instruction to add a litigation-status field). Delegated under ADR-0025;
+# the reason is the whole of it, so it is written here and not summarised.
+#
+#   A published fine is the FINAL COLLECTED FIGURE, not the notice figure.
+#
+# Why that reading and not "the notice figure, because that is what the
+# regulator announced": this schema's own examples are the argument. Doorstep
+# Dispensaree's notice was GBP 275,000 and the figure that stands is GBP 92,000,
+# confirmed by the Court of Appeal on 2024-12-09 -- the notice overstated by 3x.
+# Clearview AI's GBP 7,552,800 has never been collected at all. The DSG Retail
+# penalty eco-system ticket 94 studied went GBP 500,000 -> GBP 250,000 at the
+# First-tier Tribunal -> set aside at the Upper Tribunal -> remitted, and has no
+# final figure six years on. Pricing from notice figures does not add noise
+# around the truth; it is biased one way, upward, every time.
+#
+# HOW A FIGURE IS GRADED. `status` is one of:
+#
+#   final                       imposed, and the challenge is decided or its
+#                               window closed. `final_as_of` carries the date
+#                               and `litigation` says how it got there. PRICES.
+#   imposed-appeal-unchecked    the regulator imposed this figure (a penalty
+#                               notice, not a notice of intent), no adverse
+#                               litigation is known to this repository, and NO
+#                               tribunal or court register was read. PRICES, and
+#                               every scenario it prices into says exactly that:
+#                               a named could-not-look on the appeal, never a
+#                               claim of finality.
+#   under-appeal, set-aside,    DOES NOT PRICE. Each carries a `litigation` note
+#   not-collected,              saying what is known and what was not looked at.
+#   notice-of-intent,
+#   not-a-penalty, unknown
+#
+# The third value exists because the alternative was worse in both directions.
+# Marking every unverified figure `final` is the defect this ticket exists to
+# fix. Marking every unverified figure `unknown` would have left uk-gdpr
+# higher-tier with no priceable example at all and refused a line the estate
+# prices today -- and would have said "we checked and it is not final", which is
+# also not true. `imposed-appeal-unchecked` says the one thing that is true: the
+# regulator imposed it, and nobody here read a register.
+#
+# A payload in which NOTHING carries a status predates the field (majors 1 to 3).
+# It prices as it always did and the converter says so on the scenario. An
+# example with no status BESIDE one that has it is refused by name: a dataset
+# half-checked for finality is worse than one not checked at all, because the
+# checked half makes the rest look checked too.
