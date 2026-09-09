@@ -173,6 +173,167 @@ def selfcheck():
     print("ok  a subscriber's own turnover scales the lm triple; no turnover stays at the cap")
 
 
+
+# --------------------------------------------------------------------------
+# eco-system ticket 79 -- planted cases, written before the logic changed.
+# Each runs the REAL functions against a planted payload and reports what it
+# saw; every case is reported, not the first to fail, so one red run names
+# everything. Items 1 (status/final_as_of/litigation), 3 (a basis for every
+# frequency) and 7/5 (the cap rule).
+# --------------------------------------------------------------------------
+
+_T79_LOWER = {
+    "authority": "ICO", "statute": "UK GDPR s157", "currency": "GBP",
+    "violation_types": {
+        "lower-tier": {
+            "description": "planted",
+            "formula": {"type": "pct_of_global_turnover", "rate": 0.02, "cap_gbp": 8_700_000},
+            "real_examples_gbp": [
+                {"org": "Clearview AI Inc", "year": 2022, "fine_gbp": 7_552_800,
+                 "source": "ICO monetary penalty notice, 23 May 2022"},
+                {"org": "Doorstep Dispensaree Ltd", "year": 2019, "fine_gbp": 275_000,
+                 "source": "ICO monetary penalty notice, 12 Dec 2019"},
+            ],
+        }
+    },
+}
+
+
+def _t79_payload(**over):
+    import copy
+    doc = {"schema_version": "v79", "note": "planted",
+           "regimes": {"uk-gdpr": copy.deepcopy(_T79_LOWER)}}
+    doc.update(over)
+    return doc
+
+
+def _t79_vt(doc):
+    return doc["regimes"]["uk-gdpr"]["violation_types"]["lower-tier"]
+
+
+def ticket79_cases():
+    """Returns (reds, greens). A red is (n, title, what was observed)."""
+    reds, greens = [], []
+
+    def case(n, title, fn):
+        try:
+            fn()
+        except AssertionError as e:
+            reds.append((n, title, str(e)))
+        except Exception as e:            # a case that cannot even run is red, never silent
+            reds.append((n, title, "raised %s: %s" % (type(e).__name__, e)))
+        else:
+            greens.append((n, title))
+
+    # (a) a fine with no `status` prices as final
+    def a1():
+        doc = _t79_payload()
+        vt = _t79_vt(doc)
+        vt["real_examples_gbp"][0]["status"] = "under-appeal"
+        vt["real_examples_gbp"][0]["final_as_of"] = None
+        vt["real_examples_gbp"][0]["litigation"] = "never collected"
+        # the second example carries no status at all
+        try:
+            got = lm_triple(doc["regimes"]["uk-gdpr"], vt)
+        except SystemExit as e:
+            assert "status" in str(e) and "Doorstep" in str(e), \
+                "refused, but not naming the example and the missing field: %s" % e
+            return
+        raise AssertionError(
+            "an example with no `status` beside one that has it priced anyway: "
+            "lm_triple returned %r" % (got,))
+
+    def a2():
+        doc = _t79_payload()
+        sc = build_scenario(doc, "uk-gdpr", "lower-tier")
+        assert "could not" in sc["note"].lower() or "no `status`" in sc["note"], \
+            ("a payload in which NO example carries a status priced with no named "
+             "could-not-look on the scenario; the note reads: %r" % sc["note"])
+
+    def a3():
+        doc = _t79_payload()
+        for e, st in zip(_t79_vt(doc)["real_examples_gbp"],
+                          ("not-collected", "final")):
+            e["status"] = st
+            e["final_as_of"] = None if st != "final" else "2024-12-09"
+            e["litigation"] = "planted"
+        lo, mode, hi = lm_triple(doc["regimes"]["uk-gdpr"], _t79_vt(doc))
+        assert mode == 275_000.0, (
+            "a `not-collected` penalty of 7,552,800 still entered the triple: the mode is "
+            "%r and the only final figure in the payload is 275,000" % mode)
+
+    # (b) a frequency with no basis
+    def b1():
+        doc = _t79_payload()
+        _t79_vt(doc)["frequency"] = {"lef": [0, 2, 4]}   # no basis
+        try:
+            build_scenario(doc, "uk-gdpr", "lower-tier")
+        except SystemExit as e:
+            assert "basis" in str(e) and "lower-tier" in str(e), \
+                "refused, but not naming the violation type and the basis: %s" % e
+            return
+        raise AssertionError(
+            "a published `frequency` of [0, 2, 4] events/yr with NO `basis` was used to "
+            "annualise the loss; its basis belongs on "
+            "regimes.uk-gdpr.violation_types.lower-tier.frequency.basis in the ico "
+            "penalty-schema payload")
+
+    def b2():
+        doc = _t79_payload()
+        sc = build_scenario(doc, "uk-gdpr", "lower-tier")
+        assert str(tuple(sc["warn"]["lef"])) in sc["note"] or "(1, 2, 4)" in sc["note"], \
+            ("the scenario annualises at %r events/yr and its note never names that number "
+             "or where its basis must go: %r" % (sc["warn"]["lef"], sc["note"]))
+
+    def b3():
+        doc = _t79_payload()
+        _t79_vt(doc)["frequency"] = {
+            "lef": [0, 3, 7],
+            "basis": {"kind": "editorial", "statement": "planted basis statement",
+                      "as_of": "2026-09-09"}}
+        sc = build_scenario(doc, "uk-gdpr", "lower-tier")
+        assert sc["warn"]["lef"] == [0, 3, 7], \
+            ("the payload publishes frequency [0, 3, 7] and the scenario annualises at %r: "
+             "the publisher's own field is not read" % (sc["warn"]["lef"],))
+        assert "planted basis statement" in sc["note"] and "2026-09-09" in sc["note"], \
+            "the published basis and its date are not on the scenario: %r" % sc["note"]
+
+    # (d) the cap rule
+    def d1():
+        doc = _t79_payload()
+        regime, vt = doc["regimes"]["uk-gdpr"], _t79_vt(doc)
+        turnover = 5_000_000_000.0
+        rate, cap = vt["formula"]["rate"], float(vt["formula"]["cap_gbp"])
+        statutory_max = max(cap, rate * turnover)
+        lo, mode, hi = lm_triple(regime, vt, turnover=turnover)
+        assert hi <= statutory_max + 1e-6, (
+            "the sized loss magnitude tops out at %.2f GBP, above the statutory maximum of "
+            "%.2f GBP (UK GDPR Art 83: the GREATER of the fixed sum %.2f and %g x turnover "
+            "%.2f) -- the converter prices a fine the statute does not permit"
+            % (hi, statutory_max, cap, rate, turnover))
+
+    case("a", "an example with no `status` beside one that has it is refused by name", a1)
+    case("a", "a payload where no example carries a status is a NAMED could-not-look", a2)
+    case("a", "a penalty that was never collected does not enter the loss triple", a3)
+    case("b", "a published frequency with no `basis` is refused, naming where the basis goes", b1)
+    case("b", "a frequency with no published basis names its own number on the scenario", b2)
+    case("b", "a published frequency and its dated basis are read and carried", b3)
+    case("d", "the sized triple never tops the statutory maximum max(cap, rate x turnover)", d1)
+    return reds, greens
+
+
+def ticket79_selfcheck() -> int:
+    reds, greens = ticket79_cases()
+    for n, title in greens:
+        print("ok  (%s) %s" % (n, title))
+    for n, title, what in reds:
+        print("FAIL (%s) %s: %s" % (n, title, what))
+    if reds:
+        print("FAIL: %d ticket-79 selfcheck case(s) red" % len(reds))
+        return 1
+    return 0
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = p.add_subparsers(dest="cmd")
@@ -202,7 +363,7 @@ def main(argv=None):
     args = p.parse_args(argv)
     if args.cmd == "selfcheck":
         selfcheck()
-        return
+        sys.exit(ticket79_selfcheck())
 
     with open(args.schema) as fh:
         schema = json.load(fh)
