@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://policy-as-versioned.dev/schema/ico-penalty-schema-payload.json",
   "title": "ico penalty-schema feed payload, major 4",
-  "description": "The payload half of the one feed envelope (ADR-0019) for ico's penalty-schema feed, major 4. Major 3's regimes and control_weights, plus three things eco-system ticket 79 required before any of these figures may be shown to an audience. (1) FINALITY: every real example carries `status`, `final_as_of` and `litigation`, so a penalty under appeal cannot price as if it were final. Only `final` and `imposed-appeal-unchecked` price; the publisher's rule is in penalty-schema/rule.yaml. (2) FREQUENCY: every violation type publishes `frequency` -- a lo<=mode<=hi loss-event-frequency band with a `basis` naming its kind, the date it was read, its denominator and what could not be looked at. A frequency with no basis is refused by the converter (ADR-0020); the floor is 0, so a loss-free year is possible. (3) BASIS ON EVERY WEIGHT: each control weight carries the same `basis` shape, and verify-penalty-feed.sh refuses a weight without one. NOTE ON THE FILE NAME: majors 1 and 2 validate against payload.schema.v2.json and major 3 against payload.schema.json. Major 3 is published and its envelope names that bare file, so repointing it would be an unreleased edit to the newest published major -- which .github/scripts/declared-bump-gate.py refuses by design (eco-system ticket 103). From major 4 on, every major's schema is payload.schema.vN.json and the bare name stays frozen at major 3.",
+  "description": "The payload half of the one feed envelope (ADR-0019) for ico's penalty-schema feed, major 4. Major 3's regimes and control_weights, plus three things eco-system ticket 79 required before any of these figures may be shown to an audience. (1) FINALITY AND SOURCING: every real example carries `source`, `status`, `final_as_of` and `litigation`, so a penalty under appeal cannot price as if it were final. Only `final` and `imposed-appeal-unchecked` price; the publisher's rule is in penalty-schema/rule.yaml. (2) FREQUENCY: every violation type publishes `frequency` -- a lo<=mode<=hi loss-event-frequency band with a `basis` naming its kind, the date it was read, its denominator and what could not be looked at. A frequency with no basis is refused by the converter (ADR-0020); the floor is 0, so a loss-free year is possible. (3) BASIS ON EVERY WEIGHT: each control weight carries the same `basis` shape, and verify-penalty-feed.sh refuses a weight without one. NOTE ON THE FILE NAME: majors 1 and 2 validate against payload.schema.v2.json and major 3 against payload.schema.json. Major 3 is published and its envelope names that bare file, so repointing it would be an unreleased edit to the newest published major -- which .github/scripts/declared-bump-gate.py refuses by design (eco-system ticket 103). From major 4 on, every major's schema is payload.schema.vN.json and the bare name stays frozen at major 3.",
   "type": "object",
   "required": [
     "note",
@@ -80,6 +80,7 @@
                     "type": "object",
                     "required": [
                       "org",
+                      "source",
                       "status",
                       "final_as_of",
                       "litigation"
@@ -114,7 +115,8 @@
                       },
                       "source": {
                         "type": "string",
-                        "minLength": 1
+                        "minLength": 1,
+                        "description": "Where the figure comes from: the regulator's own instrument, and where a later decision moved it, what moved it and where that is recorded. REQUIRED for every example (eco-system ticket 79 review F1): before it was, an example with a `status` and no source priced -- an invented GBP 5,000,000 with status `final` moved uk-gdpr/lower-tier's mode from GBP 92,000 to GBP 2,546,000 and the feed check said PASS."
                       },
                       "status": {
                         "type": "string",
@@ -130,11 +132,11 @@
                         ]
                       },
                       "final_as_of": {
-                        "description": "The date the figure became final. Null for every status but `final`.",
+                        "description": "The date the figure became final, at the PRECISION the source supports: YYYY, YYYY-MM or YYYY-MM-DD. Null for every status but `final`. Year precision is not a rounder date, it is the honest one where no source in this estate's record carries a day (review F2).",
                         "anyOf": [
                           {
                             "type": "string",
-                            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                            "pattern": "^\\d{4}(-\\d{2}(-\\d{2})?)?$"
                           },
                           {
                             "type": "null"
@@ -154,6 +156,7 @@
                     "type": "object",
                     "required": [
                       "org",
+                      "source",
                       "status",
                       "final_as_of",
                       "litigation"
@@ -188,7 +191,8 @@
                       },
                       "source": {
                         "type": "string",
-                        "minLength": 1
+                        "minLength": 1,
+                        "description": "Where the figure comes from: the regulator's own instrument, and where a later decision moved it, what moved it and where that is recorded. REQUIRED for every example (eco-system ticket 79 review F1): before it was, an example with a `status` and no source priced -- an invented GBP 5,000,000 with status `final` moved uk-gdpr/lower-tier's mode from GBP 92,000 to GBP 2,546,000 and the feed check said PASS."
                       },
                       "status": {
                         "type": "string",
@@ -204,11 +208,11 @@
                         ]
                       },
                       "final_as_of": {
-                        "description": "The date the figure became final. Null for every status but `final`.",
+                        "description": "The date the figure became final, at the PRECISION the source supports: YYYY, YYYY-MM or YYYY-MM-DD. Null for every status but `final`. Year precision is not a rounder date, it is the honest one where no source in this estate's record carries a day (review F2).",
                         "anyOf": [
                           {
                             "type": "string",
-                            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                            "pattern": "^\\d{4}(-\\d{2}(-\\d{2})?)?$"
                           },
                           {
                             "type": "null"

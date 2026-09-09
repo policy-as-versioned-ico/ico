@@ -16,8 +16,9 @@ numeric_tolerance: 0
 #
 # Why that reading and not "the notice figure, because that is what the
 # regulator announced": this schema's own examples are the argument. Doorstep
-# Dispensaree's notice was GBP 275,000 and the figure that stands is GBP 92,000,
-# confirmed by the Court of Appeal on 2024-12-09 -- the notice overstated by 3x.
+# Dispensaree's notice was GBP 275,000 and the figure that stands is GBP 92,000 --
+# cut by the First-tier Tribunal in 2021 and confirmed when the Court of Appeal
+# dismissed the further appeal in 2024 -- so the notice overstated by 3x.
 # Clearview AI's GBP 7,552,800 has never been collected at all. The DSG Retail
 # penalty eco-system ticket 94 studied went GBP 500,000 -> GBP 250,000 at the
 # First-tier Tribunal -> set aside at the Upper Tribunal -> remitted, and has no
@@ -26,16 +27,20 @@ numeric_tolerance: 0
 #
 # HOW A FIGURE IS GRADED. `status` is one of:
 #
-#   final                       imposed, and the challenge is decided or its
-#                               window closed. `final_as_of` carries the date
-#                               and `litigation` says how it got there. PRICES.
-#   imposed-appeal-unchecked    the regulator imposed this figure (a penalty
-#                               notice, not a notice of intent), no adverse
-#                               litigation is known to this repository, and NO
-#                               tribunal or court register was read. PRICES, and
-#                               every scenario it prices into says exactly that:
-#                               a named could-not-look on the appeal, never a
-#                               claim of finality.
+#   final                       the challenge is decided, and THIS REPOSITORY HAS
+#                               A SOURCED RECORD OF IT. `final_as_of` carries the
+#                               date at the precision that source supports --
+#                               YYYY, YYYY-MM or YYYY-MM-DD -- and `litigation`
+#                               says how it got there and what the basis was.
+#                               PRICES.
+#   imposed-appeal-unchecked    the regulator's own CONCLUDING INSTRUMENT (an ICO
+#                               monetary penalty notice, an FCA Final Notice, an
+#                               HHS OCR resolution agreement), no adverse
+#                               litigation about it known to this repository, and
+#                               NO tribunal or court register read FOR THAT
+#                               EXAMPLE. PRICES, and every scenario it prices into
+#                               says exactly that: a named could-not-look on the
+#                               appeal, never a claim of finality.
 #   under-appeal, set-aside,    DOES NOT PRICE. Each carries a `litigation` note
 #   not-collected,              saying what is known and what was not looked at.
 #   notice-of-intent,
@@ -47,7 +52,42 @@ numeric_tolerance: 0
 # higher-tier with no priceable example at all and refused a line the estate
 # prices today -- and would have said "we checked and it is not final", which is
 # also not true. `imposed-appeal-unchecked` says the one thing that is true: the
-# regulator imposed it, and nobody here read a register.
+# regulator issued its concluding instrument, and nobody here read a register
+# for it.
+#
+# ONE RULE FOR EVERY REGULATOR (review F4). The first cut of this file graded ICO
+# monetary penalty notices `imposed-appeal-unchecked`, so they priced, and FCA
+# Final Notices `unknown`, so they did not -- while the two litigation notes
+# described the SAME posture: the regulator's concluding instrument, no register
+# read. The non-uniformity tracked the PRICING OUTCOME rather than the evidence,
+# which is this ticket's own defect in miniature. It is gone: an ICO monetary
+# penalty notice, an FCA Final Notice and an HHS OCR resolution agreement are all
+# concluding instruments and grade the same way, and `unknown` now applies to
+# nothing in this payload -- every example names the instrument it came from, so
+# "we do not know what this is" was never true of any of them.
+#
+# SOURCING IS NOT FINALITY (review F1). Grading finality and not sourcing grades
+# half the question. A figure with a status and no `source` priced exactly as
+# well as one with both: an invented GBP 5,000,000 marked `final` moved
+# uk-gdpr/lower-tier's priced mode from GBP 92,000 to GBP 2,546,000 and every
+# check said PASS. `source` is now REQUIRED on every example; a PRICED example
+# with no source refuses by name, in the converter and in verify-penalty-feed.sh;
+# and every scenario prints what each priced figure rests on.
+#
+# PRECISION IS PART OF THE CLAIM (review F2). `final_as_of` takes a year, a month
+# or a day, and the honest value is the precision the source supports. Doorstep
+# Dispensaree's reduction is recorded in this eco-system's own
+# REVIEW-2026-09-02.md, citing Hunton and DataGuidance, as: the FIRST-TIER
+# TRIBUNAL cut it to GBP 92,000 in 2021, and the COURT OF APPEAL dismissed the
+# further appeal in 2024. No source this estate holds carries a day, so
+# `final_as_of` is `2024`. A day-precise date would have been a claim about a
+# court record nobody here has read -- and the first cut of this payload made
+# exactly that claim, and attributed the reduction to the wrong court.
+#
+# A NOTICE BELOW ITS OWN FINAL FIGURE IS REFUSED (review F5), naming both
+# numbers: the rule above rests on notice figures being biased ONE WAY, upward,
+# and a notice below the figure that stands is either a transposition or a case
+# this rule does not describe.
 #
 # A payload in which NOTHING carries a status predates the field (majors 1 to 3).
 # It prices as it always did and the converter says so on the scenario. An

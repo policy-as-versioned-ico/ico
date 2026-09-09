@@ -26,10 +26,15 @@ and the scenario's own `note` then says so, names the number and names where its
 basis must go -- a NAMED could-not-look, never a bare number. deny collapses LEF
 the same way every other scenario in this estate does (deny.lef ~ (0,0,1)).
 
-Finality (eco-system ticket 79 item 1). From payload major 4 every real example
-carries `status`, `final_as_of` and `litigation`. Only a penalty whose status is
-`final` enters the loss magnitude: the publisher's rule, recorded in
+Finality and sourcing (eco-system ticket 79 item 1, review F1 and F2). From
+payload major 4 every real example carries `source`, `status`, `final_as_of` and
+`litigation`. TWO statuses price: `final`, and `imposed-appeal-unchecked` --
+which prices AND says on every scenario it reaches that no register was read for
+it. Everything else does not. The publisher's rule, recorded in
 penalty-schema/rule.yaml, is THE FINAL COLLECTED FIGURE, NOT THE NOTICE FIGURE.
+A priceable example with NO `source` is refused by name: before review F1, an
+invented GBP 5,000,000 with a status and no source moved uk-gdpr/lower-tier's
+priced mode from GBP 92,000 to GBP 2,546,000 and every check said PASS.
 Two of this schema's own examples say why -- Doorstep Dispensaree's GBP 275,000
 notice became GBP 92,000 at the Court of Appeal on 2024-12-09, and Clearview
 AI's GBP 7,552,800 has never been collected. An example carrying no `status`
@@ -72,9 +77,14 @@ DEFAULT_DENY_LEF = (0, 0, 1)   # admission blocks the loss path (matches driftwo
 #                               closed or the challenge is decided; `final_as_of`
 #                               says on what date, and `litigation` says how.
 # `imposed-appeal-unchecked`    the regulator IMPOSED this figure (a penalty
-#                               notice, not a notice of intent), no adverse
-#                               litigation is known to this repository, and NO
-#                               tribunal or court register was read. It prices,
+#                               notice, an FCA final notice, an HHS OCR
+#                               resolution agreement), no adverse litigation about
+#                               it is known to this repository, and NO tribunal or
+#                               court register was read FOR THAT EXAMPLE -- which
+#                               is a statement about that example and not about
+#                               the payload, so a figure whose finality IS sourced
+#                               from published reporting recorded in this estate
+#                               is `final` and says where (review F2). It prices,
 #                               and every scenario it prices into says exactly
 #                               that -- a named could-not-look on the APPEAL, not
 #                               a claim of finality (eco-system ticket 79 item 1).
@@ -121,13 +131,23 @@ def _final_examples(vt: dict, currency_key: str, where: str) -> tuple[list[float
         sys.exit(f"{where}: {named} carries no `status`, and other examples here do -- a "
                  f"penalty with no status prices as if it were final. Give it `status`, "
                  f"`final_as_of` and `litigation`, or remove it (eco-system ticket 79 item 1)")
-    final, dropped, unchecked = [], [], []
+    final, dropped, unchecked, sources = [], [], [], []
     for e in entries:
         if fine_key not in e:
             continue
         who = str(e.get("org", "an unnamed example"))
+        # REVIEW F1. Finality without sourcing grades half the question: a figure
+        # nobody can trace prices exactly as well as one everybody can. A priced
+        # example with no `source` is a missing instrument (ADR-0020), refused by
+        # name -- never dropped quietly, which would move the price too.
+        if e.get("status") in PRICING_STATUS and not str(e.get("source") or "").strip():
+            sys.exit(f"{where}: {who} would price {e[fine_key]:,.0f} {currency_key} and names no "
+                     f"`source`. A figure with a status and no source is a number nobody can "
+                     f"trace; give it the regulator's own instrument and where any later decision "
+                     f"is recorded (eco-system ticket 79 review F1)")
         if e.get("status") in PRICING_STATUS:
             final.append(e[fine_key])
+            sources.append(f"{who} ({e[fine_key]:,.0f} {currency_key}): {e['source']}")
             if e.get("status") == UNCHECKED_STATUS:
                 unchecked.append(f"{who} ({e[fine_key]:,.0f} {currency_key})")
         else:
@@ -144,6 +164,8 @@ def _final_examples(vt: dict, currency_key: str, where: str) -> tuple[list[float
                      "the regulator imposed, with no tribunal or court register read by this "
                      "repository and no adverse litigation known to it. A named could-not-look "
                      "(eco-system ticket 79 item 1), never a claim that the figure is final.")
+    if sources:
+        parts.append("Priced from, with what each rests on: " + " | ".join(sources) + ".")
     return final, " ".join(parts)
 
 
@@ -493,6 +515,38 @@ def ticket79_cases():
     case("b", "a published frequency with no `basis` is refused, naming where the basis goes", b1)
     case("b", "a frequency with no published basis names its own number on the scenario", b2)
     case("b", "a published frequency and its dated basis are read and carried", b3)
+    def f1():
+        doc = _t79_payload()
+        for e in _t79_vt(doc)["real_examples_gbp"]:
+            e["status"] = "final"
+            e["final_as_of"] = "2024"
+            e["litigation"] = "planted"
+        _t79_vt(doc)["real_examples_gbp"].append(
+            {"org": "Invented Ltd", "year": 2025, "fine_gbp": 5_000_000, "status": "final",
+             "final_as_of": "2025-01-01", "litigation": "final and collected."})
+        try:
+            got = lm_triple(doc["regimes"]["uk-gdpr"], _t79_vt(doc))
+        except SystemExit as e:
+            assert "source" in str(e) and "Invented Ltd" in str(e), \
+                "refused, but not naming the example and the missing source: %s" % e
+            return
+        raise AssertionError(
+            "an example with a `status` and NO `source` priced: lm_triple returned %r. A figure "
+            "nobody can trace prices exactly as well as one everybody can" % (got,))
+
+    def f1b():
+        doc = _t79_payload()
+        for e in _t79_vt(doc)["real_examples_gbp"]:
+            e["status"] = "final"
+            e["final_as_of"] = "2024"
+            e["litigation"] = "planted"
+        sc = build_scenario(doc, "uk-gdpr", "lower-tier")
+        assert "ICO monetary penalty notice, 23 May 2022" in sc["note"], \
+            ("the scenario prices from published fines and never says what each rests on: %r"
+             % sc["note"])
+
+    case("f1", "an example with a status and no source is refused by name", f1)
+    case("f1", "the scenario names what each priced figure rests on", f1b)
     case("d", "the sized triple never tops the statutory maximum max(cap, rate x turnover)", d1)
     return reds, greens
 

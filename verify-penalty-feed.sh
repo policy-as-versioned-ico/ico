@@ -243,7 +243,7 @@ if ! echo "$tags" | grep -qx -e "$pin" -e "v$pin"; then
 fi
 echo "ok  nist tag v$pin is on the remote -- major 3's control ids key on a real catalogue version"
 
-say "9. every real example in major 4 carries a finality status, a date and a litigation note"
+say "9. every real example in major 4 names its SOURCE and carries a finality status, a date and a litigation note"
 python3 - "$here" <<'FINALITY'
 import json, os, sys
 
@@ -283,12 +283,41 @@ for regime, r in env["payload"]["regimes"].items():
                 if not (e.get("litigation") or "").strip():
                     bad("%s carries no `litigation` note saying what is known about the "
                         "challenge and what was not looked at" % who)
+                # REVIEW F1. Sourcing, not only finality. A figure that PRICES and
+                # names no source is a number nobody can trace, and it prices
+                # exactly as well as one everybody can: an invented GBP 5,000,000
+                # with status `final` and no source moved uk-gdpr/lower-tier's
+                # mode from GBP 92,000 to GBP 2,546,000 and this section said ok.
+                source = str(e.get("source") or "").strip()
+                priced = status in PRICES and any(k in e for k in
+                                                   ("fine_gbp", "fine_usd", "notice_gbp",
+                                                    "notice_usd"))
+                if priced and not source:
+                    bad("%s carries a figure and a status of %r but NO `source`, so it prices "
+                        "from a number nobody can trace back to a regulator's own instrument "
+                        "(eco-system ticket 79 review F1)" % (who, status))
+                if not source:
+                    bad("%s names no `source`" % who)
+                # REVIEW F5. rule.yaml's whole premise is that notice figures are
+                # biased ONE WAY, upward. A notice below the figure that stands
+                # contradicts it, so it is refused with both numbers rather than
+                # quietly kept.
+                for fine_key, notice_key in (("fine_gbp", "notice_gbp"),
+                                              ("fine_usd", "notice_usd")):
+                    if notice_key in e and fine_key in e and e[notice_key] < e[fine_key]:
+                        bad("%s carries a notice figure of %s below the figure that stands, %s. "
+                            "penalty-schema/rule.yaml's rule rests on notice figures being biased "
+                            "one way, UPWARD; a notice below its own final figure is either a "
+                            "transposition or a case that rule does not describe (eco-system "
+                            "ticket 79 review F5)"
+                            % (who, format(e[notice_key], ",.0f"), format(e[fine_key], ",.0f")))
                 seen += 1
-                print("ok  %-52s %-24s %s" % (who, status, e.get("final_as_of") or "-"))
+                print("ok  %-46s %-24s %-11s %s"
+                      % (who, status, e.get("final_as_of") or "-", source[:88]))
 if seen < 8:
     bad("only %d example(s) graded; major 4 carries more than that" % seen)
-print("ok  %d real example(s) in major 4, every one with a status, a date field and a "
-      "litigation note; %d of them price" % (
+print("ok  %d real example(s) in major 4, every one naming its source and carrying a status, "
+      "a date field and a litigation note; %d of them price" % (
           seen, sum(1 for r in env["payload"]["regimes"].values()
                     for v in r["violation_types"].values()
                     for k in ("real_examples_gbp", "real_examples_usd")
@@ -431,6 +460,29 @@ if r.returncode == 0:
 if "status" not in r.stderr or "Doorstep" not in r.stderr:
     bad("the converter refused a status-less example without naming it: %s" % r.stderr.strip()[-200:])
 print("ok  an example with no status beside one that has it refuses, naming the example")
+
+# REVIEW F1: a priceable example with no source REFUSES, and the price does not move.
+sourceless = copy.deepcopy(payload)
+sourceless["regimes"]["uk-gdpr"]["violation_types"]["lower-tier"]["real_examples_gbp"].append(
+    {"org": "Invented Ltd", "year": 2025, "fine_gbp": 5_000_000, "status": "final",
+     "final_as_of": "2025-01-01", "litigation": "final and collected."})
+r = run(sourceless, "uk-gdpr", "lower-tier")
+if r.returncode == 0:
+    got = json.loads(r.stdout)["warn"]["lm"]
+    bad("an invented figure with a status and NO source priced: uk-gdpr/lower-tier's lm became "
+        "%r. Before eco-system ticket 79 review F1 this moved the mode from 92,000 to 2,546,000 "
+        "and every check said PASS" % (got,))
+if "source" not in r.stderr or "Invented Ltd" not in r.stderr:
+    bad("the converter refused a sourceless example without naming it: %s" % r.stderr.strip()[-200:])
+print("ok  an invented figure with a status and no source refuses, naming it, and moves no price")
+
+if "ICO monetary penalty notice, 12 Dec 2019" not in sc["note"]:
+    bad("the scenario prices Doorstep Dispensaree and never says what that figure rests on: %r"
+        % sc["note"])
+if "FIRST-TIER TRIBUNAL" not in sc["note"] or "2021" not in sc["note"]:
+    bad("the scenario does not carry WHICH court moved the figure and when: %r" % sc["note"])
+print("ok  the scenario names what every priced figure rests on, including which court moved "
+      "Doorstep Dispensaree's and in what year")
 CONVERTER
 
 echo
