@@ -245,13 +245,17 @@ echo "ok  nist tag v$pin is on the remote -- major 3's control ids key on a real
 
 say "9. every real example in major 4 names its SOURCE and carries a finality status, a date and a litigation note"
 python3 - "$here" <<'FINALITY'
-import json, os, sys
+import json, os, re, sys
 
 root = sys.argv[1]
 env = json.load(open(os.path.join(root, "penalty-schema/v4/feed.json")))
 PRICES = ("final", "imposed-appeal-unchecked")
 STATUSES = PRICES + ("under-appeal", "set-aside", "not-collected", "notice-of-intent",
                      "not-a-penalty", "unknown")
+# The three precisions payload.schema.v4.json declares. Enforced here because
+# nothing else runs jsonschema over this payload on the estate's python3
+# (review N4).
+FINAL_AS_OF = re.compile(r"^\d{4}(-\d{2}(-\d{2})?)?$")
 
 
 def bad(msg):
@@ -274,6 +278,12 @@ for regime, r in env["payload"]["regimes"].items():
                     bad("%s carries status %r, which is not one of %s" % (who, status, list(STATUSES)))
                 if "final_as_of" not in e:
                     bad("%s carries no `final_as_of`; it is null for every status but `final`" % who)
+                # Review N4: the schema declares the grammar and nothing enforced it --
+                # `final_as_of: '24'` passed this section while jsonschema rejects it.
+                if e.get("final_as_of") and not FINAL_AS_OF.match(str(e["final_as_of"])):
+                    bad("%s carries final_as_of %r, which is not YYYY, YYYY-MM or YYYY-MM-DD -- "
+                        "the precisions payload.schema.v4.json declares (review N4)"
+                        % (who, e["final_as_of"]))
                 if status == "final" and not e.get("final_as_of"):
                     bad("%s is `final` and names no `final_as_of` date -- a disclosed limit is a "
                         "printed number or a date" % who)
@@ -426,8 +436,8 @@ if 7552800 in lm or 275000 in lm:
     bad("major 4's uk-gdpr/lower-tier still prices a figure that was never collected "
         "(7,552,800) or the superseded notice figure (275,000): lm is %r" % (lm,))
 if 92000.0 not in lm:
-    bad("major 4's uk-gdpr/lower-tier does not price the GBP 92,000 the Court of Appeal "
-        "confirmed on 2024-12-09: lm is %r" % (lm,))
+    bad("major 4's uk-gdpr/lower-tier does not price the GBP 92,000 the First-tier Tribunal "
+        "set in 2021 and the Court of Appeal confirmed in 2024: lm is %r" % (lm,))
 if "Clearview" not in sc["note"] or "not-collected" not in sc["note"]:
     bad("the scenario does not name the figure it refused to price: %r" % sc["note"])
 if sc["warn"]["lef"] != payload["regimes"]["uk-gdpr"]["violation_types"]["lower-tier"]["frequency"]["lef"]:

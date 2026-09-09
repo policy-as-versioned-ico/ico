@@ -36,8 +36,14 @@ A priceable example with NO `source` is refused by name: before review F1, an
 invented GBP 5,000,000 with a status and no source moved uk-gdpr/lower-tier's
 priced mode from GBP 92,000 to GBP 2,546,000 and every check said PASS.
 Two of this schema's own examples say why -- Doorstep Dispensaree's GBP 275,000
-notice became GBP 92,000 at the Court of Appeal on 2024-12-09, and Clearview
-AI's GBP 7,552,800 has never been collected. An example carrying no `status`
+notice was cut to GBP 92,000 by the FIRST-TIER TRIBUNAL in 2021, and confirmed
+at that figure when the Court of Appeal dismissed the further appeal in 2024;
+and Clearview AI's GBP 7,552,800 has never been collected. (Review N2: this
+paragraph used to say the Court of Appeal made the reduction, on 2024-12-09 --
+the wrong body and a day no source this estate holds carries. It is corrected
+here because THIS MODULE IS VENDORED into every adopter's composed/feeds/ tree
+under eco-system ticket 45, so a wrong sentence in it travels into signed
+artefacts.) An example carrying no `status`
 beside one that does is refused by name. A payload in which NOTHING carries a
 status predates the field: it prices as it always did and the scenario says
 plainly that no example in it could be checked for finality.
@@ -452,7 +458,7 @@ def ticket79_cases():
         for e, st in zip(_t79_vt(doc)["real_examples_gbp"],
                           ("not-collected", "final")):
             e["status"] = st
-            e["final_as_of"] = None if st != "final" else "2024-12-09"
+            e["final_as_of"] = None if st != "final" else "2024"
             e["litigation"] = "planted"
         lo, mode, hi = lm_triple(doc["regimes"]["uk-gdpr"], _t79_vt(doc))
         assert mode == 275_000.0, (

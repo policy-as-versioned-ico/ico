@@ -46,14 +46,24 @@ numeric_tolerance: 0
 #   notice-of-intent,
 #   not-a-penalty, unknown
 #
-# The third value exists because the alternative was worse in both directions.
-# Marking every unverified figure `final` is the defect this ticket exists to
-# fix. Marking every unverified figure `unknown` would have left uk-gdpr
-# higher-tier with no priceable example at all and refused a line the estate
-# prices today -- and would have said "we checked and it is not final", which is
-# also not true. `imposed-appeal-unchecked` says the one thing that is true: the
-# regulator issued its concluding instrument, and nobody here read a register
-# for it.
+# The third value exists for ONE reason, and it is evidential: it is the only
+# grading that is TRUE of these figures. Marking every unverified figure `final`
+# claims a check nobody made -- the defect this ticket exists to fix. Marking
+# them all `unknown` claims the opposite check, "we looked and it is not final",
+# which nobody made either, and it throws away the one thing that IS known: which
+# instrument the regulator issued. `imposed-appeal-unchecked` says exactly that
+# and nothing more.
+#
+# WITHDRAWN 2026-09-09 (review N6). This paragraph used to add "…would have left
+# uk-gdpr higher-tier with no priceable example at all and refused a line the
+# estate prices today". That is an argument from the PRICING OUTCOME, which is
+# the reasoning the ONE RULE section below calls this ticket's own defect in
+# miniature -- and it sat directly above that section, contradicting it. It was
+# also false on its facts: composition prices only `uk-gdpr/lower-tier`
+# (platform compose/composition.py ICO_REGIME / ICO_VIOLATION_TYPE), so no line
+# the estate prices today would have been refused by grading higher-tier
+# `unknown`. This file's whole purpose is the reason, so the bad reason is
+# withdrawn here rather than left standing beside the good one.
 #
 # ONE RULE FOR EVERY REGULATOR (review F4). The first cut of this file graded ICO
 # monetary penalty notices `imposed-appeal-unchecked`, so they priced, and FCA
