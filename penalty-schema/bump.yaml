@@ -21,5 +21,7 @@
 # (.github/scripts/declared-bump-gate.py, eco-system ticket 103) reads the
 # predecessor AT v3.0.0, checks that v3 on disk is byte-for-byte what v3.0.0
 # published, and refuses any tag that is not bump(v3.0.0, major) = v4.0.0.
-# Set this back to `none` once v4.0.0 is tagged and nothing further is queued.
-bump: major
+# RESET TO `none` 2026-09-10: v4.0.0 is tagged, signed and published, and nothing
+# further is queued. The line above records what v4.0.0 was and why; this file's
+# own history is the record, so the prose is kept rather than deleted.
+bump: none
