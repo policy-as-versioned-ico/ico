@@ -403,6 +403,8 @@ BASIS
 
 say "11. the converter refuses a bare number and prices only what the finality rule allows"
 python3 "$schema_dir/to_fair_scenario.py" selfcheck
+python3 "$schema_dir/test_widening_cli.py"
+python3 "$here/.github/tests/test_publisher_release_gate.py"
 python3 - "$here" "$schema_dir" <<'CONVERTER'
 import json, os, subprocess, sys, tempfile
 
