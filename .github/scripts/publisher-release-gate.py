@@ -2,7 +2,7 @@
 """Opt-in publisher release proof. No signing, tag creation, or network access.
 
 build FEED FULL_TAG NATIVE_PATH CAGE_PATH writes proposed proof files only.
-verify CAGE_PATH FULL_TAG reconstructs the native decision from Git inputs.
+verify CAGE_PATH FULL_TAG [TARGET_PATH] reconstructs the native decision from Git inputs.
 Git dates/order are publisher assertions, not an independently measured clock.
 """
 import hashlib
@@ -201,6 +201,8 @@ def flat(path):
 
 
 def decision(feed, published_as, source_anchor):
+    if feed != 'penalty-schema':
+        raise Refused('ICO publishes only penalty-schema; another cage target cannot authorize this release')
     head = git('rev-parse', 'HEAD').decode().strip()
     if git('rev-parse', '--is-shallow-repository').strip() != b'false':
         raise Refused('native history requires a complete non-shallow publisher clone')
@@ -324,8 +326,9 @@ def main(args):
         emit(cage_path, cage_for(record, native_path, raw))
         print('BUILT publisher native release proof; no tag/ref/payload changed')
         return
-    if len(args) == 3 and args[0] == 'verify':
-        _, cage_path, tag = args
+    if len(args) in (3, 4) and args[0] == 'verify':
+        _, cage_path, tag = args[:3]
+        selected_path = relative(args[3]) if len(args) == 4 else None
         head = git('rev-parse', 'HEAD').decode().strip()
         cage = parse(read(cage_path))
         closed(cage, ('schema', 'target_name', 'target_version', 'published_as', 'outcome', 'tier',
@@ -343,6 +346,8 @@ def main(args):
         if not isinstance(native, dict):
             raise Refused('native evidence must be an object')
         record = decision(cage['target_name'], tag, native.get('source_anchor'))
+        if selected_path is not None and selected_path != record['target_semantic']['path']:
+            raise Refused('cage target does not match the workflow-selected payload path')
         if native != record or cage != cage_for(record, cage['native_evidence']['path'], raw):
             raise Refused('native evidence/cage do not reproduce the native gate')
         payload = parse(read(record['target_semantic']['path']))['payload']
@@ -350,7 +355,7 @@ def main(args):
             raise Refused('target payload does not link this exact same-tree cage')
         print('VERIFIED publisher native release gate and exact target cage')
         return
-    raise Refused('usage: build FEED FULL_TAG NATIVE_PATH CAGE_PATH | verify CAGE_PATH FULL_TAG')
+    raise Refused('usage: build FEED FULL_TAG NATIVE_PATH CAGE_PATH | verify CAGE_PATH FULL_TAG [TARGET_PATH]')
 
 
 if __name__ == '__main__':

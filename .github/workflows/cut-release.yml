@@ -79,12 +79,18 @@ jobs:
           from pathlib import Path
           tag = sys.argv[1]
           major = tag.removeprefix('v').split('.')[0]
-          payload = json.loads(Path(f'penalty-schema/v{major}/feed.json').read_text())['payload']
+          selected_path = f'penalty-schema/v{major}/feed.json'
+          envelope = json.loads(Path(selected_path).read_text())
+          payload = envelope['payload']
           if 'release_cage' in payload:
+              if (envelope.get('kind') != 'feed' or envelope.get('name') != 'penalty-schema'
+                      or envelope.get('published_by') != 'ico' or envelope.get('version') != tag.removeprefix('v')):
+                  raise SystemExit('REFUSED: selected ICO feed identity/version differs from the requested release')
               cage = payload['release_cage']
-              if not isinstance(cage, dict) or set(cage) != {'path', 'git_blob'}:
-                  raise SystemExit('FAIL: malformed opt-in release_cage')
-              command = [sys.executable, '.github/scripts/publisher-release-gate.py', 'verify', cage['path'], tag]
+              if (not isinstance(cage, dict) or set(cage) != {'path', 'git_blob'}
+                      or not isinstance(cage['path'], str) or not isinstance(cage['git_blob'], str)):
+                  raise SystemExit('REFUSED: malformed opt-in release_cage')
+              command = [sys.executable, '.github/scripts/publisher-release-gate.py', 'verify', cage['path'], tag, selected_path]
           else:
               command = [sys.executable, '.github/scripts/declared-bump-gate.py', tag]
           raise SystemExit(subprocess.run(command).returncode)

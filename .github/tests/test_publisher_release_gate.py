@@ -1,6 +1,7 @@
 """Synthetic unsigned Git fixtures: public release-gate CLI, no signing/network."""
 from pathlib import Path
 import copy
+import hashlib
 import json
 import os
 import shutil
@@ -38,12 +39,20 @@ class ReleaseGateCLI(unittest.TestCase):
         self.payload = {'kind': 'feed', 'name': FEED, 'published_by': PARTY, 'version': '3.0.0',
                         'payload_schema': 'synthetic/payload.json', 'payload': {'entries': {'same': {'lm': 9}}}}
         self.save()
+        self.foreign = copy.deepcopy(self.payload)
+        self.foreign['name'] = 'unpublished-feed'
+        self.write('unpublished-feed/v3/feed.json', self.foreign)
+        self.write('unpublished-feed/rule.yaml', 'entries: entries\nnumeric_tolerance: 0\nchanged_when: fixture\n')
+        self.write('unpublished-feed/bump.yaml', 'bump: patch\n')
         self.commit('synthetic predecessor')
         self.git('tag', '-a', PREFIX + 'v3.0.0', '-m', 'Synthetic unsigned predecessor')
         self.env.update(GIT_AUTHOR_DATE='2026-10-18T00:00:00Z', GIT_COMMITTER_DATE='2026-10-18T00:00:00Z')
         self.payload['version'] = '3.0.1'
         self.payload['payload']['entries']['same']['lm'] = 10
         self.save()
+        self.foreign['version'] = '3.0.1'
+        self.foreign['payload']['entries']['same']['lm'] = 10
+        self.write('unpublished-feed/v3/feed.json', self.foreign)
         self.commit('synthetic target inputs')
 
     def git(self, *args):
@@ -196,6 +205,65 @@ class ReleaseGateCLI(unittest.TestCase):
                                 env=environment, capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('REFUSED:', result.stderr)
+
+    def test_pre_sign_selected_feed_cannot_use_reproducible_foreign_cage(self):
+        # Construct an untrusted but genuinely reproducible foreign-feed proof
+        # from the public native build; no production guard is mocked/disabled.
+        built = self.build()
+        self.assertEqual(built.returncode, 0, built.stderr)
+        record = json.loads((self.root / 'native.json').read_text())
+        cage = json.loads((self.root / 'cage.json').read_text())
+        record['target_name'] = 'unpublished-feed'
+        record['target_semantic']['path'] = 'unpublished-feed/v3/feed.json'
+        record['target_semantic']['sha256'] = hashlib.sha256(json.dumps(
+            self.foreign, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()).hexdigest()
+        for previous in [record['predecessor'], *record['captured_releases']]:
+            previous['path'] = 'unpublished-feed/v3/feed.json'
+            previous['git_blob'] = self.git('rev-parse', previous['commit'] + ':' + previous['path'])
+        for path in list(record['inputs']):
+            if path.startswith('penalty-schema/'):
+                ref = record['inputs'].pop(path)
+                new_path = path.replace('penalty-schema/', 'unpublished-feed/', 1)
+                record['inputs'][new_path] = {'path': new_path, 'git_blob': ref['git_blob']}
+        self.write('native.json', record)
+        cage['target_name'] = 'unpublished-feed'
+        cage['native_evidence']['git_blob'] = self.git('hash-object', 'native.json')
+        self.write('cage.json', cage)
+        ref = {'path': 'cage.json', 'git_blob': self.git('hash-object', 'cage.json')}
+        self.foreign['payload']['release_cage'] = ref
+        self.write('unpublished-feed/v3/feed.json', self.foreign)
+        self.payload['payload']['entries'] = {}  # Actual selected computation is MAJOR.
+        self.payload['payload']['release_cage'] = ref
+        self.save()
+        self.commit('synthetic foreign proof over selected underdeclared major')
+        workflow = (ROOT / '.github/workflows/cut-release.yml').read_text()
+        heading = '      - name: "the declared bump must agree'
+        block = workflow[workflow.index(heading):].split('\n      - name:', 1)[0]
+        script = textwrap.dedent(block.split('        run: |\n', 1)[1])
+        actual = subprocess.run(['bash', '-euo', 'pipefail', '-c', script], cwd=self.root,
+                                env=dict(self.env, VERSION_INPUT='v3.0.1'), capture_output=True, text=True)
+        legacy = subprocess.run([sys.executable, NATIVE, 'v3.0.1'], cwd=self.root,
+                                env=self.env, capture_output=True, text=True)
+        self.assertNotEqual(legacy.returncode, 0, legacy.stdout)
+        self.assertIn("computed bump for the next release is 'major'", legacy.stderr)
+        direct = self.invoke('verify', 'cage.json', 'v3.0.1')
+        print(json.dumps({'synthetic_wrong_target': {label: {'exit': r.returncode, 'stdout': r.stdout, 'stderr': r.stderr}
+            for label, r in [('pre_sign', actual), ('direct_verify', direct), ('original_selected_gate', legacy)]}}))
+        for label, result in [('actual pre-sign step', actual), ('direct verify', direct)]:
+            with self.subTest(boundary=label):
+                self.assert_refused(result)
+
+    def test_explicit_selected_target_path_and_pointer_blob_are_bound(self):
+        tag = self.enroll()
+        result = self.invoke('verify', 'cage.json', tag, 'penalty-schema/v3/feed.json')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        result = self.invoke('verify', 'cage.json', tag, 'unpublished-feed/v3/feed.json')
+        self.assert_refused(result)
+        self.assertIn('workflow-selected payload path', result.stderr)
+        self.payload['payload']['release_cage']['git_blob'] = '0' * 40
+        self.save()
+        self.commit('synthetic wrong selected cage pointer blob')
+        self.assert_refused(self.invoke('verify', 'cage.json', tag, 'penalty-schema/v3/feed.json'))
 
 if __name__ == '__main__':
     unittest.main()
