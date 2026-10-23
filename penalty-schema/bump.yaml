@@ -27,4 +27,7 @@
 # SET TO `patch` 2026-10-23: publish the reviewed converter ABI and optional
 # native release-proof helper with a truthful existing payload.changelog note.
 # The changelog metadata computes patch; financial values and enrollment do not change.
-bump: patch
+# RESET TO `none` 2026-10-23: v4.0.1 is signed and published (Release 421410540).
+# The completed adapter compatibility release has nothing left queued;
+# the released source, financial payload and enrollment remain unchanged.
+bump: none
