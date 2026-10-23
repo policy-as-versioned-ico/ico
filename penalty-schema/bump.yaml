@@ -24,4 +24,7 @@
 # RESET TO `none` 2026-09-10: v4.0.0 is tagged, signed and published, and nothing
 # further is queued. The line above records what v4.0.0 was and why; this file's
 # own history is the record, so the prose is kept rather than deleted.
-bump: none
+# SET TO `patch` 2026-10-23: publish the reviewed converter ABI and optional
+# native release-proof helper with a truthful existing payload.changelog note.
+# The changelog metadata computes patch; financial values and enrollment do not change.
+bump: patch

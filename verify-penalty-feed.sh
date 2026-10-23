@@ -79,6 +79,8 @@ assert combined > solo, f"a second obligation source on the same breach did not 
 print(f"ok  £ rose by £{combined - solo:,.0f} once a second regime can draw on the same breach -- fatter, not thinner")
 PY
 
+python3 "$here/.github/tests/test_feed_envelopes.py"
+
 say "6. the four published feed envelopes match the one feed contract (ADR-0019)"
 python3 - "$here" <<'ENVELOPE'
 import json, os, re, sys
@@ -96,7 +98,7 @@ def bad(msg):
 
 
 seen = {}
-for major, version in (("v1", "1.0.0"), ("v2", "2.0.0"), ("v3", "3.0.0"), ("v4", "4.0.0")):
+for major in ("v1", "v2", "v3", "v4"):
     where = "penalty-schema/%s/feed.json" % major
     env = json.load(open(os.path.join(root, where)))
     if set(env) != ENVELOPE_KEYS:
@@ -108,11 +110,11 @@ for major, version in (("v1", "1.0.0"), ("v2", "2.0.0"), ("v3", "3.0.0"), ("v4",
         bad("%s name is %r" % (where, env["name"]))
     if env["published_by"] != "ico":
         bad("%s published_by is %r" % (where, env["published_by"]))
-    if not SEMVER.match(env["version"]):
+    if not isinstance(env["version"], str) or not SEMVER.fullmatch(env["version"]):
         bad("%s version %r is not a semver string without a leading v"
             % (where, env["version"]))
-    if env["version"] != version:
-        bad("%s declares version %s, expected %s" % (where, env["version"], version))
+    if env["version"].split(".")[0] != major[1:]:
+        bad("%s declares version %s, expected major %s" % (where, env["version"], major[1:]))
     if not RFC3339.match(env["published_at"]):
         bad("%s published_at %r is not RFC3339" % (where, env["published_at"]))
     if not isinstance(env["payload"], dict):
@@ -130,7 +132,7 @@ for major, version in (("v1", "1.0.0"), ("v2", "2.0.0"), ("v3", "3.0.0"), ("v4",
             extra = [k for k in env["payload"] if k not in schema.get("properties", {})]
             if extra:
                 bad("%s payload carries %s, unknown to %s" % (where, extra, ps))
-    seen[env["version"]] = env
+    seen[major] = env
     print("ok  %s  %s v%s by %s at %s, payload validates against %s"
           % (where, env["name"], env["version"], env["published_by"],
              env["published_at"], ps))
@@ -145,7 +147,7 @@ for major, src in (("v1", "schema/v1/penalty-schema.json"),
 print("ok  v1 and v2 envelopes carry the schema/ regimes payloads unchanged")
 
 v2_src = json.load(open(os.path.join(root, "schema/v2/penalty-schema.json")))
-if seen["3.0.0"]["payload"]["regimes"] != v2_src["regimes"]:
+if seen["v3"]["payload"]["regimes"] != v2_src["regimes"]:
     bad("major 3 changed the regimes payload; it is a payload_schema major, not a rate change")
 print("ok  major 3 adds control_weights and leaves the regimes payload alone")
 
@@ -153,7 +155,7 @@ print("ok  major 3 adds control_weights and leaves the regimes payload alone")
 # 1 corrects two stale figures and grades the finality of every one. What it may
 # not do is change a formula while doing it -- a finality correction is not a
 # rate change, and the two must not travel together unannounced.
-v3_p, v4_p = seen["3.0.0"]["payload"], seen["4.0.0"]["payload"]
+v3_p, v4_p = seen["v3"]["payload"], seen["v4"]["payload"]
 for regime, r4 in v4_p["regimes"].items():
     r3 = v3_p["regimes"].get(regime)
     if r3 is None:
