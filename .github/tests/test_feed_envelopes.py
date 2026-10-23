@@ -65,7 +65,8 @@ class FeedEnvelopeTests(unittest.TestCase):
         self.assert_refused("declares version")
 
     def test_malformed_versions_are_refused(self):
-        for version in ("v4.0.1", "4.01.0", "4.0", "4.0.1-rc.1", "4.0.1\n", 4, None):
+        for version in ("v4.0.1", "4.01.0", "4.0", "4.0.1-rc.1", "4.0.1\n",
+                        "4.1\u0662.0", "4.0.1\u0662", 4, None):
             with self.subTest(version=version):
                 self.change(4, lambda env: env.update(version=version))
                 self.assert_refused("not a semver string")
