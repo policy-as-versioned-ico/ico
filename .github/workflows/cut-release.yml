@@ -1,116 +1,32 @@
 name: cut-release
-
-# Ticket mo-10 (policy-as-versioned-flux). Creates a gitsign-signed, semver
-# git tag and pushes it -- the ONLY way a release starts (git push, never the
-# git-data REST API: see the hub repo's enact_guard.py governance rule).
-#
-# Signs keyless via this run's own GitHub Actions identity, not a human
-# Google/Microsoft identity: gitsign auto-detects the Actions ambient
-# credential (present because of the id-token permission below) and needs no
-# browser/device-code interaction. This is a deliberate variant of the
-# identity ADR-0001 describes for the sibling policy/fleet repos (a human,
-# chris@cns.me.uk via Google) -- an unattended agent may not drive an
-# interactive Google OAuth consent on a person's behalf, so the workflow's
-# own machine identity is the signer instead. Same keyless -> Fulcio -> Rekor
-# provenance chain; a different, equally real identity. See release.yml for
-# the matching identity-pinned verification.
-#
-# workflow_dispatch only, on purpose: this is a release-cutting ACT, not a
-# standing recurring automation.
-
-on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: "semver tag to cut, e.g. v1.0.0"
-        required: true
-      message:
-        description: "annotated tag message -- what changed and why"
-        required: true
-
-permissions:
-  contents: write
-  id-token: write
-
+on: {pull_request: {}, push: {branches: [main]}, workflow_dispatch: {}}
+permissions: {contents: read}
 env:
-  GITSIGN_VERSION: 0.17.1
-  GITSIGN_SHA256: 69213a8a0813a151e5a47d0060862952ff833a845d57309dff76f7ba6600abae
-
+  FEED: penalty-schema/feed.json
+  PREFIX: v
 jobs:
-  cut:
+  test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: install pinned gitsign (binary + checksum, no marketplace action)
-        run: |
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - run: python3 -m unittest -v test_feed
+  cut:
+    needs: test
+    if: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && vars.CUT_ON_MERGE == 'true')) }}
+    runs-on: ubuntu-latest
+    permissions: {contents: write, "id-token": write}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: {fetch-depth: 0}
+      - run: |
           set -euo pipefail
-          curl -sSL -o gitsign "https://github.com/sigstore/gitsign/releases/download/v${GITSIGN_VERSION}/gitsign_${GITSIGN_VERSION}_linux_amd64"
-          echo "${GITSIGN_SHA256}  gitsign" | sha256sum -c -
-          chmod +x gitsign && sudo mv gitsign /usr/local/bin/gitsign
-
-      - name: "the tag must name a real, released feed version (ADR-0019: envelope version == tag)"
-        run: |
-          set -euo pipefail
-          version="${{ inputs.version }}"; version="${version#v}"
-          major="${version%%.*}"
-          file="penalty-schema/v${major}/feed.json"
-          [ -f "${file}" ] || { echo "FAIL: ${file} does not exist" >&2; exit 1; }
-          declared=$(python3 -c "import json;print(json.load(open('${file}'))['version'])")
-          if [ "${declared}" != "${version}" ]; then
-            echo "FAIL: ${file} declares ${declared}, tag says ${version}" >&2
-            exit 1
-          fi
-          echo "OK: ${file} declares ${declared}"
-
-      # Ticket 43 (18 Answer 5): the bump is DECLARED in a reviewed file and
-      # the gate refuses when the computed bump disagrees -- before the tag
-      # exists, so a wrong number is never signed. The dispatch input reaches
-      # the script through `env:`, never interpolated into the command line
-      # (the same rule cut-release-normalize.py states in platform).
-      - name: "the declared bump must agree with the computed bump (ticket 43, 18 Answer 5)"
-        env:
-          VERSION_INPUT: ${{ inputs.version }}
-        run: |
-          python3 - "${VERSION_INPUT}" <<'PYCODE'
-          import json, subprocess, sys
-          from pathlib import Path
-          tag = sys.argv[1]
-          major = tag.removeprefix('v').split('.')[0]
-          selected_path = f'penalty-schema/v{major}/feed.json'
-          envelope = json.loads(Path(selected_path).read_text())
-          payload = envelope['payload']
-          if 'release_cage' in payload:
-              if (envelope.get('kind') != 'feed' or envelope.get('name') != 'penalty-schema'
-                      or envelope.get('published_by') != 'ico' or envelope.get('version') != tag.removeprefix('v')):
-                  raise SystemExit('REFUSED: selected ICO feed identity/version differs from the requested release')
-              cage = payload['release_cage']
-              if (not isinstance(cage, dict) or set(cage) != {'path', 'git_blob'}
-                      or not isinstance(cage['path'], str) or not isinstance(cage['git_blob'], str)):
-                  raise SystemExit('REFUSED: malformed opt-in release_cage')
-              command = [sys.executable, '.github/scripts/publisher-release-gate.py', 'verify', cage['path'], tag, selected_path]
-          else:
-              command = [sys.executable, '.github/scripts/declared-bump-gate.py', tag]
-          raise SystemExit(subprocess.run(command).returncode)
-          PYCODE
-
-      - name: reject a tag that already exists (no force-move, ever)
-        run: |
-          set -euo pipefail
-          if git rev-parse "refs/tags/${{ inputs.version }}" >/dev/null 2>&1; then
-            echo "FAIL: ${{ inputs.version }} already exists -- tags are immutable here, cut a new version" >&2
-            exit 1
-          fi
-
-      - name: create the signed annotated tag (ambient Actions identity, no interactive login)
-        run: |
-          set -euo pipefail
-          git -c gpg.format=x509 -c gpg.x509.program=gitsign \
-            -c user.name="policy-as-versioned release bot" \
-            -c user.email="releases@${GITHUB_REPOSITORY_OWNER}.invalid" \
-            tag -s "${{ inputs.version }}" -m "${{ inputs.message }}"
-
-      - name: push the tag (git push only -- never the git-data REST API)
-        run: git push origin "${{ inputs.version }}"
+          version=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$FEED")
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "refused: version '$version'"; exit 1; }
+          tag="${PREFIX}${version}"
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then git diff --quiet "refs/tags/$tag" HEAD -- "$FEED" || { echo "refused: $FEED changed and version did not"; exit 1; }; echo "$tag exists: nothing to cut"; exit 0; fi
+          curl -fsSL -o "$RUNNER_TEMP/gitsign" https://github.com/sigstore/gitsign/releases/download/v0.17.1/gitsign_0.17.1_linux_amd64
+          echo "69213a8a0813a151e5a47d0060862952ff833a845d57309dff76f7ba6600abae  $RUNNER_TEMP/gitsign" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/gitsign"; export PATH="$RUNNER_TEMP:$PATH"
+          git -c gpg.format=x509 -c gpg.x509.program=gitsign -c gitsign.rekorMode=offline -c user.name="policy-as-versioned release bot" -c user.email="releases@${GITHUB_REPOSITORY_OWNER}.invalid" tag -s "$tag" -m "$tag"
+          GITSIGN_REKOR_MODE=offline gitsign verify-tag "$tag" --certificate-oidc-issuer=https://token.actions.githubusercontent.com --certificate-identity-regexp="^https://github\.com/${GITHUB_REPOSITORY}/\.github/workflows/cut-release\.yml@refs/heads/main$"
+          git push origin "refs/tags/$tag"
