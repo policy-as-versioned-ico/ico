@@ -8,7 +8,7 @@ The feed is one input to a loop that prices a party's losses against its toleran
 
 ## What the feed says
 
-- `penalty_rate` is the chance that one breach draws a penalty. It is `null` until someone counts the regulator's register. A reader takes `null` as 1.
+- `penalty_rate` is the chance that one breach report draws a penalty. Since version 5.1.0 it is 0.0002095, a count of 20 penalties over 95,466 breach reports. Its basis gives the interval and the limits of the count. A reader takes a `null` rate as 1.
 - A fine prices only if its status is `final` or `imposed-appeal-unchecked`. A fine that was set aside or never collected is listed and does not price.
 - The mean penalty at a turnover is worked out by the reader from the tier's rate and cap and from the pricing fines.
 
