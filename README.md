@@ -4,7 +4,7 @@
 
 This repository publishes one feed: `penalty-schema/feed.json`. The feed holds the UK GDPR penalty regime. It has two tiers, each with a rate, a cap and the fines that bear on it. Every fine carries its status, its source and a note on its litigation.
 
-The feed is one input to a loop that prices a party's losses against its tolerance. The loop reads the feed from a pinned commit or tag.
+The feed is one input to a loop that prices a party's losses against its tolerance. The loop reads the feed from a pinned, signed tag and its commit.
 
 ## What the feed says
 
@@ -14,10 +14,10 @@ The feed is one input to a loop that prices a party's losses against its toleran
 
 ## How a change lands
 
-1. Change `penalty-schema/feed.json` and its `version` in the same pull request. A change to the numbers with the same `version` is refused when the tag is cut.
+1. Change `penalty-schema/feed.json` and its `version` in the same pull request. A change to the feed with the same `version` is refused when the tag is cut.
 2. The `test` job runs `test_feed.py` on every pull request and every push to `main`. The tests check the shape of the file.
 3. The GitHub App `pavc-other-hand` approves and merges it, from the orchestrator's session.
-4. The `cut` job signs and pushes the tag `v<version>` from `main`. It runs on dispatch. It runs on a merge too once the repository variable `CUT_ON_MERGE` is `true`. A tag that exists is never moved.
+4. The `cut` job signs and pushes the tag `v<version>` from `main`. The repository variable `CUT_ON_MERGE` is `true`, so the job runs on dispatch and on each push to `main`. It cuts a tag only when `version` is new. A tag that exists is never moved.
 
 To run the tests: `python3 -m unittest -v test_feed`.
 
