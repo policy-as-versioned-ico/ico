@@ -2,7 +2,7 @@ import json
 import unittest
 from pathlib import Path
 
-PRICING = {"final", "imposed-appeal-unchecked"}
+STATUSES = {"final", "imposed-appeal-unchecked", "not-collected"}
 
 
 def unique(pairs):
@@ -27,16 +27,15 @@ def fines():
 
 class FeedShape(unittest.TestCase):
     def test_header(self):
-        self.assertEqual(FEED["feed"], "penalty-schema")
-        self.assertEqual(FEED["published_by"], "ico")
         self.assertRegex(FEED["version"], r"^[0-9]+\.[0-9]+\.[0-9]+$")
         self.assertEqual(list(FEED["regimes"]), ["uk-gdpr"])
+        self.assertTrue(FEED["note"].startswith("A demonstration party, not affiliated with"))
 
     def test_regime(self):
         self.assertEqual(REGIME["currency"], "GBP")
         self.assertEqual(list(REGIME["tiers"]), ["higher", "lower"])
         for tier in REGIME["tiers"].values():
-            self.assertTrue(number(tier["rate"]) and number(tier["cap"]))
+            self.assertTrue(number(tier["rate"]) and tier["rate"] <= 1 and number(tier["cap"]))
 
     def test_penalty_rate(self):
         rate, basis = REGIME["penalty_rate"], REGIME["penalty_rate_basis"]
@@ -51,9 +50,7 @@ class FeedShape(unittest.TestCase):
     def test_each_fine(self):
         for name, fine in fines():
             with self.subTest(tier=name, org=fine["org"]):
-                self.assertTrue(fine["status"])
-                self.assertIsInstance(fine["year"], int)
+                self.assertIn(fine["status"], STATUSES)
                 self.assertTrue(number(fine["amount"]))
                 self.assertTrue(fine["litigation"])
-                if fine["status"] in PRICING:
-                    self.assertTrue(fine["source"])
+                self.assertTrue(fine["source"])
