@@ -3,9 +3,8 @@
 A demonstration party, not affiliated with, endorsed by or speaking for any real authority it names.
 
 `policy-as-versioned-ico` is a party in the *Policy as Versioned Code* demonstration estate. It is
-**not** the Information Commissioner's Office, the Financial Conduct Authority, the US Department
-of Health and Human Services, any card scheme or acquiring bank, or any other regulator or
-authority named in its files. Nobody at any of those bodies has reviewed, approved or contributed
+**not** the Information Commissioner's Office or any other regulator or authority named in its
+files. Nobody at any of those bodies has reviewed, approved or contributed
 to this repository.
 
 ## What the signature means
